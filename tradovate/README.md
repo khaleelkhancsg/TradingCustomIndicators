@@ -67,7 +67,7 @@ A custom indicator that draws volume-based support and resistance. It only inclu
 
 ### Chart setup
 
-- **Include the overnight session** on intraday charts. ONH/ONL need the overnight bars.
+- **Include the overnight session** on intraday charts. The overnight high/low need the overnight bars.
 - **Load enough history** for the lookback: about 25 days intraday, about 4 months on 1H/4H, about 14 months on daily.
 - **ES/MES:** set `binSize` to 0.25 and `roundStep` to 25. The defaults (1.0 and 100) are for NQ/MNQ.
 
@@ -75,13 +75,13 @@ A custom indicator that draws volume-based support and resistance. It only inclu
 
 | On the chart | Group | Measured vs random levels |
 |---|---|---|
-| teal band + `HVN 20s 21585.5` | **Hold:** high-volume node of the lookback profile | +4.1 to +4.3 pp more bounces |
-| gold line + `POC 5s 21775.5` | **Hold:** point of control of the recent profile | +5.6 to +5.8 pp |
-| orange line + `pdPOC 21785.75` | **Hold:** prior period's point of control | +1.7 to +5.8 pp |
-| red dashed + `PDH 21860 break-prone` | **Break-prone:** prior-period high/low, overnight high/low | −1 to −6 pp (breaks more) |
-| grey dashed + `R100 21800` | **Break-prone:** round numbers | −3.1 to −4.6 pp (breaks more) |
+| teal band + `High Volume Node (20 sessions) 21585.25` | **Hold:** high-volume node of the lookback profile | +4.1 to +4.3 pp more bounces |
+| gold line + `Point of Control (5 sessions) 21775.5` | **Hold:** point of control of the recent profile | +5.6 to +5.8 pp |
+| orange line + `Prior Day Point of Control 21785.75` | **Hold:** prior period's point of control | +1.7 to +5.8 pp |
+| red dashed + `Prior Day High 21871.25 (break-prone)` | **Break-prone:** prior-period high/low, overnight high/low | −1 to −6 pp (breaks more) |
+| grey dashed + `Round Number 21800 (break-prone)` | **Break-prone:** round numbers | −3.1 to −4.6 pp (breaks more) |
 
-"Break-prone" levels are stop clusters. Price broke through them more often than through random levels, so don't fade them blindly. When levels sit within about 1.5% of the typical range of each other, they share one label, e.g. `POC 3M 29342.5 | HVN 12M 29340.75`.
+"Break-prone" levels are stop clusters. Price broke through them more often than through random levels, so don't fade them blindly. When levels sit within about 1.5% of the typical range of each other, they share one label, e.g. `Point of Control (3 months) 29342.5 | High Volume Node (12 months) 29340.75`.
 
 ### Timeframe adaptation
 
@@ -89,9 +89,9 @@ The indicator detects the bar size from the bar timestamps and picks the scale. 
 
 | Chart bars | Scale | Prior-period levels | POC / HVN lookback | Round step (MNQ) |
 |---|---|---|---|---|
-| tick, 1–30 min | Session | PDH / PDL (RTH), ONH / ONL, pdPOC | 5 / 20 sessions | 100 |
-| 1H – 4H | Week | PWH / PWL, pwPOC | 4 / 12 weeks | 500 |
-| daily and up | Month | PMH / PML, pmPOC | 3 / 12 months | 1000 |
+| tick, 1–30 min | Session | Prior Day High / Low (RTH), Overnight High / Low, Prior Day Point of Control | 5 / 20 sessions | 100 |
+| 1H – 4H | Week | Prior Week High / Low, Prior Week Point of Control | 4 / 12 weeks | 500 |
+| daily and up | Month | Prior Month High / Low, Prior Month Point of Control | 3 / 12 months | 1000 |
 
 On bars coarser than 1 minute, the indicator uses Tradovate's per-bar volume-at-price, requested via `requirements: { volumeProfiles: true }`. Spreading each bar's volume evenly across its range gets worse as bars get bigger. In testing, 30-minute bars matched only 49% of the 1-minute HVNs that way, versus 100% with volume-at-price. If the platform doesn't supply the data, the indicator falls back to the even spread.
 

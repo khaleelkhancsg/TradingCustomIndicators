@@ -50,9 +50,9 @@ const COLORS = {
 
 // Per-scale definitions. SESSION reproduces the tested research exactly.
 const SCALES = {
-    session: { hvn: 20, poc: 5, prefix: "PD", hvnTag: "20s", pocTag: "5s", pPocTag: "pdPOC" },
-    week: { hvn: 12, poc: 4, prefix: "PW", hvnTag: "12W", pocTag: "4W", pPocTag: "pwPOC" },
-    month: { hvn: 12, poc: 3, prefix: "PM", hvnTag: "12M", pocTag: "3M", pPocTag: "pmPOC" }
+    session: { hvn: 20, poc: 5, period: "Day", unit: "session" },
+    week: { hvn: 12, poc: 4, period: "Week", unit: "week" },
+    month: { hvn: 12, poc: 3, period: "Month", unit: "month" }
 };
 
 // ---------------------------------------------------------------- time ----
@@ -275,7 +275,7 @@ class EvidenceLevels {
             : p.binSize * Math.max(1, Math.round(U / (275 * p.binSize)));
         // coarse bars smear volume across their range: prefer true volume-at-price
         const useVp = barMin > 1;
-        const out = { scale, U, bin, hvn: [], poc: null, pPoc: null, ph: null, pl: null };
+        const out = { scale, U, bin, hvnN, pocN, hvn: [], poc: null, pPoc: null, ph: null, pl: null };
 
         const composite = (n) => {
             if (done.length < n) return null;
@@ -374,6 +374,8 @@ class EvidenceLevels {
             groups[g].push({ tag: "Line", a: { x: x0, y: du(y) }, b: { x: xEnd, y: du(y) }, infiniteEnd: true });
             marks.push({ price: y, text, color });
         };
+        const span = (n) => `${n} ${def.unit}${n === 1 ? "" : "s"}`;
+        const BRK = "(break-prone)";
 
         if (p.showHVN) {
             for (const z of L.hvn) {
@@ -381,14 +383,18 @@ class EvidenceLevels {
                     { x: x0, y: du(z.top) }, { x: xFar, y: du(z.top) },
                     { x: xFar, y: du(z.bottom) }, { x: x0, y: du(z.bottom) }
                 ] });
-                line("hvn", z.price, `HVN ${def.hvnTag} ${fmt(z.price)}`, COLORS.hvn);
+                line("hvn", z.price, `High Volume Node (${span(L.hvnN)}) ${fmt(z.price)}`, COLORS.hvn);
             }
         }
-        if (p.showPOC && L.poc != null) line("poc", L.poc, `POC ${def.pocTag} ${fmt(L.poc)}`, COLORS.poc);
-        if (p.showPriorPOC && L.pPoc != null) line("pPoc", L.pPoc, `${def.pPocTag} ${fmt(L.pPoc)}`, COLORS.pPoc);
+        if (p.showPOC && L.poc != null) {
+            line("poc", L.poc, `Point of Control (${span(L.pocN)}) ${fmt(L.poc)}`, COLORS.poc);
+        }
+        if (p.showPriorPOC && L.pPoc != null) {
+            line("pPoc", L.pPoc, `Prior ${def.period} Point of Control ${fmt(L.pPoc)}`, COLORS.pPoc);
+        }
         if (p.showPriorHL && L.ph != null) {
-            line("brk", L.ph, `${def.prefix}H ${fmt(L.ph)} break-prone`, COLORS.brk);
-            line("brk", L.pl, `${def.prefix}L ${fmt(L.pl)} break-prone`, COLORS.brk);
+            line("brk", L.ph, `Prior ${def.period} High ${fmt(L.ph)} ${BRK}`, COLORS.brk);
+            line("brk", L.pl, `Prior ${def.period} Low ${fmt(L.pl)} ${BRK}`, COLORS.brk);
         }
         if (p.showOvernightHL && L.scale === "session") {
             const bars = cur.bars;
@@ -397,8 +403,8 @@ class EvidenceLevels {
             if (hasEvening && on.length) {
                 const onh = Math.max(...on.map((b) => b.h));
                 const onl = Math.min(...on.map((b) => b.l));
-                line("brk", onh, `ONH ${fmt(onh)} break-prone`, COLORS.brk);
-                line("brk", onl, `ONL ${fmt(onl)} break-prone`, COLORS.brk);
+                line("brk", onh, `Overnight High ${fmt(onh)} ${BRK}`, COLORS.brk);
+                line("brk", onl, `Overnight Low ${fmt(onl)} ${BRK}`, COLORS.brk);
             }
         }
         if (p.showRound) {
@@ -408,7 +414,7 @@ class EvidenceLevels {
             for (let k = Math.ceil((last - 1.5 * L.U) / step); k <= k1; k++) {
                 const y = k * step;
                 const whole = Math.abs(y / L.roundStep - Math.round(y / L.roundStep)) < 1e-9;
-                line("round", y, `R${fmt(whole ? L.roundStep : step)} ${fmt(y)}`, COLORS.round);
+                line("round", y, `${whole ? "Round Number" : "Half Round Number"} ${fmt(y)} ${BRK}`, COLORS.round);
             }
         }
 
