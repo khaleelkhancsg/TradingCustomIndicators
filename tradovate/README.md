@@ -78,10 +78,35 @@ A custom indicator that draws volume-based support and resistance. It only inclu
 | teal band + `High Volume Node (20 sessions) 21585.25` | **Hold:** high-volume node of the lookback profile | +4.1 to +4.3 pp more bounces |
 | gold line + `Point of Control (5 sessions) 21775.5` | **Hold:** point of control of the recent profile | +5.6 to +5.8 pp |
 | orange line + `Prior Day Point of Control 21785.75` | **Hold:** prior period's point of control | +1.7 to +5.8 pp |
-| red dashed + `Prior Day High 21871.25 (break-prone)` | **Break-prone:** prior-period high/low, overnight high/low | −1 to −6 pp (breaks more) |
+| red dashed + `Prior Day High 21871.25 (break-prone)` | **Break-prone:** prior-day high/low, overnight high/low (weekly/monthly highs and lows are neutral, drawn grey) | −1 to −6 pp (breaks more) |
 | grey dashed + `Round Number 21800 (break-prone)` | **Break-prone:** round numbers | −3.1 to −4.6 pp (breaks more) |
 
 "Break-prone" levels are stop clusters. Price broke through them more often than through random levels, so don't fade them blindly. When levels sit within about 1.5% of the typical range of each other, they share one label, e.g. `Point of Control (3 months) 29342.5 | High Volume Node (12 months) 29340.75`.
+
+### Levels are fixed; broken levels stay
+
+A level never moves once it's set. That matches the research, where every level was known before price reached it. All levels are recomputed when a new period starts.
+
+- **Overnight high/low** are drawn only from 09:30 ET, when the overnight session is over. Before then they're just the running high and low so far, so every new extreme would move the line. To see those running values, turn on `showDevelopingOvernight`: they appear as grey "Overnight Low so far … (developing, fixed at 09:30 ET)".
+- **Broken levels** are ones price has traded R through from the side it started on (R = 5% of the typical range, about 15 points on MNQ; the research's break rule). They stay where they were, drawn in dimmed grey and labelled with the time, e.g. `Overnight Low 21510 (break-prone, broken at 09:54 ET)`. They're kept because after a break, price came back to the level within 30 minutes about 80% of the time. `markBroken` turns this off.
+- **Clock calibration.** The indicator checks its clock against CME's 18:00 ET reopen. If Tradovate stamps bars in local time or at bar close, the session and 09:30 boundaries still land correctly. The previous version got the prior-day and overnight levels wrong on 11–12 of 12 test days under those formats.
+
+### Settlement, and weekly/monthly POCs on intraday charts
+
+- **Settlement.** A blue dashed line labelled `Prior Day Settlement` (`Prior Week` / `Prior Month Settlement` on 1H and daily charts). It's the close of the last bar ending by 16:00 ET. CME settles on the 15:59:30–16:00:00 ET average, so the two are usually within a tick or two; half days settle at their early close. It's a reference line only: tested as the prior-day close, it neither held nor broke more than random levels. `showSettlement` turns it off.
+- **Weekly and monthly POCs on 1–30 minute charts.** Purple lines: `Prior Week Point of Control`, `Point of Control (4 weeks)`, `Prior Month Point of Control` and `Point of Control (3 months)`. On intraday touches they held about as well as the daily POCs (+5 pp vs random levels, pooled). They need enough history loaded: about 5 weeks for the weekly lines and about 4 months for the monthly lines. `showWeeklyPOC` and `showMonthlyPOC` turn them off.
+- **Prior week/month high and low** (on 1H and slower charts) are drawn as plain grey reference lines, not break-prone. Unlike the daily ones, they were neutral in the research.
+- **Rolls.** The 4-week, 3-month and 12-week/12-month profiles cross quarterly contract rolls, which have shifted MNQ by 200–300 points each time since 2023. The research used roll-adjusted prices. On a continuous chart that isn't roll-adjusted, those profiles are skewed around each roll. Charting the actual contract (e.g. MNQZ6) avoids this.
+
+### Which timeframe
+
+The levels are the same on any chart from 1 to 30 minutes, because they come from the session-scale definitions. What changes is how precisely you can see price react to them.
+
+- **1–5 minute charts are the best fit.** The reactions were measured over about 15–35 points within 60 minutes of a touch, which is only visible on fast charts. The levels are also exact there (on 5m, 86% of HVNs match 1-minute even without Tradovate's volume-at-price).
+- **15 minute** still works, but it shows a 15-point reaction as a single candle.
+- **30 minute and slower** give coarse levels unless Tradovate supplies volume-at-price.
+- **1H and up** switch to weekly/monthly levels, which were never tested.
+- **Hold levels vs break-prone levels.** The hold levels (Point of Control, High Volume Node) showed up more clearly at the ~35-point reaction size: Prior Day Point of Control was +5.8 pp there vs +1.7 pp at ~15 points. The break-prone levels, round numbers especially, showed up at both sizes. Treat hold levels as intraday swing context and break-prone levels as scalp-scale context.
 
 ### Timeframe adaptation
 
