@@ -35,7 +35,7 @@ It uses the 2026 version of the rules:
 | gold line + `BUY STOP` | The stop-entry: signal close ± 0.15 ATR. Starts **on the signal candle** |
 | red line + `SL`, green line + `TP` | The bracket, at the tick prices the orders rest at |
 | `● BOUGHT 7 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
-| dashed orange line | The 40-minute checkpoint: fill ± 1 ATR |
+| orange line | The 40-minute checkpoint: fill ± 1 ATR |
 | `TP +$612`, `SL -$998`, `TIME 40m -$84`, `FLIP`, `FLAT` | The exit and the trade's dollars (after $0.75/side commission, no slippage) |
 | `no fill` | A stop-entry that expired |
 
@@ -54,6 +54,126 @@ A signal the bot skipped is usually one of those.
 
 - Verified outside Tradovate against the bot's golden test file and seven years of MNQ data, including every 2026-rule trade against the research engine (34 checks). The research and verification files named in the code's header live in my separate backtesting project.
 - Not verified inside Tradovate itself: the label placement uses Tradovate's pixel offsets and left/right text alignment. If labels look misplaced, turn off `showLineLabels`; the lines and markers still draw.
+
+## `mnqDonchian1250.js` — MNQ Donchian for a $1,250-target evaluation
+
+A custom indicator for a **2-minute MNQ chart**, built for an evaluation with a **$1,250 profit target, $1,000 trailing maximum loss, $600 daily loss limit and a 50% consistency rule**. It uses the same breakout signal as `mnqDonchianBot.js`, with the smaller size and tighter day rules those account rules reward. Unlike `mnqDonchianBot.js`, it adds up the day's P&L from its own trades, so it applies the day rules and shows when the day is done.
+
+On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **61.3%** of 21-day windows (Jan–Mar 63.3%, Apr–Jul 63.0%).
+
+| Rule | |
+|---|---|
+| Signal | 2-min close outside the previous 30 bars' high/low, ADX(14) ≥ 25, efficiency(20) ≥ 0.5, on a bar opening 08:30–15:00 CT. Or the slow-trend rescue: efficiency 0.45–0.5 with the 2-min EMA 125 on the breakout's side of the EMA 500 |
+| Size | 4 lots; 2 once the day's RTH range has covered 90% of its 10-session average |
+| Entry | Stop 0.15 ATR beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
+| Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer. At 4 lots that is nearly always the $600 line (about 75 points) |
+| Target | 1.75 ATR from the signal close |
+| Exits | The bracket; out at the next open if the trade is not +1 ATR by the 20th bar after entry (40 minutes); an opposite signal; flat at 15:04 CT |
+| Day | No new orders once the day is −$300 (breaker), +$250 (profit block) or at the −$600 limit |
+
+### Install
+
+1. In Tradovate, open the custom indicator code editor and create a new indicator.
+2. Paste the **entire** contents of `mnqDonchian1250.js` and save.
+3. Add it to a 2-minute MNQ chart from the indicator list (tagged **MNQ bot**).
+
+### Chart setup
+
+- **Include the overnight session.** The channel, ATR and ADX run over every bar, overnight included. An RTH-only chart gives different signals.
+- **Load at least 11 days.** The late-day size rule compares today's range with the previous 10 sessions, and the slow-trend rescue needs 1,500 bars behind a signal.
+- **One check on first load:** signals should sit on the candle whose close broke the channel. If everything looks one candle late, turn on `barTimeIsClose`.
+
+### Reading it
+
+| On the chart | Meaning |
+|---|---|
+| `▲ BUY 4` / `▼ SELL 4` | A signal, and the order it places: side and size |
+| `△` / `▽` … `· trend` | Let through by the slow-trend rescue |
+| `· range 93%` | 2 lots instead of 4: the day had already covered 93% of its average range |
+| `· moves stop if unfilled` | A stop-entry on the same side is still resting. It keeps the next candle; if it has not filled by then, it moves to the new level |
+| `· cancels sell stop` | A stop-entry resting the other way is cancelled at the next open |
+| `· flip` | Reverses an open trade |
+| `▼ · closes trade` | Closes the open trade at the next open but places no new order (too late in the session, or that trade's result ends the day) |
+| bare `▲` / `▼` | A signal that places nothing: already in that trade, or too late in the session |
+| gold line + `BUY STOP` | The stop-entry: signal close ± 0.15 ATR. Starts **on the signal candle** |
+| red line + `SL`, green line + `TP` | The bracket, at the tick prices the orders rest at. `· day limit` when the $600 line sets the stop |
+| `● BOUGHT 4 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
+| orange line | The 40-minute checkpoint: fill ± 1 ATR |
+| `TP +$324`, `SL -$594 · day limit`, `TIME 40m -$84`, `FLIP`, `FLAT` | The exit and the trade's dollars (after $0.75/side commission, no slippage) |
+| `DAY DONE +$324 (profit block)` | The day is done: profit block, breaker or daily limit. Later signals that day are not drawn |
+| `no fill` / `cancelled` | A stop-entry that expired, or that an opposite signal cancelled |
+
+### The day rules
+
+- It adds up the day's P&L from the trades it draws (after commission, no slippage) and starts again at the 16:00 CT session change.
+- The stop goes where the day would reach −$600 after the trade's commission. After a winning trade the day has more room, so a later loss can be bigger than $600: after +$237, the stop allows −$837.
+- It cannot see your account. If anything else trades the account (manual trades, another strategy), its day P&L and its stops will be wrong.
+- `contracts`, `lateContracts`, `dayLossLimit`, `breaker` and `profitBlock` are settings. 0 turns the breaker or the profit block off.
+
+### Notes
+
+- Verified outside Tradovate on seven years of MNQ data. In research mode it reproduces every trade of the research engine, day rules included (2,869 of 2,869). The 2026 pass rate rebuilt from its own trades is the same 61.3%. Every order's lines start on its signal candle, at the exact prices the order then rests at. The research and verification files named in the code's header live in my separate backtesting project.
+- Not verified inside Tradovate itself: the label placement uses Tradovate's pixel offsets and left/right text alignment. If labels look misplaced, turn off `showLineLabels`; the lines and markers still draw.
+- Place the orders as the lines appear: one bar of entry delay cut the 2026 pass rate to 51.8%.
+- The settings were chosen on 2026 alone (139 sessions), so treat the pass rate as an estimate with a wide margin.
+
+## `mnqMacdFade1250.js` — MNQ MACD fade for a $1,250-target evaluation
+
+A custom indicator for a **1-minute MNQ chart**, for the same evaluation rules. It trades against every 1-minute MACD cross during RTH: a cross up is a sell, a cross down is a buy. It is the runner-up to `mnqDonchian1250.js`, and the opposite kind of trade: it fades short pushes instead of following breakouts.
+
+On 2026 data (same costs) it passed **58.5%** of 21-day windows (Jan–Mar 52.4%, Apr–Jul 68.5%) and made money in every month. On the actual calendar windows of 2026 it passed 46%, against the Donchian's 60%, because its January–March was weaker.
+
+| Rule | |
+|---|---|
+| Signal | The MACD(12, 26, 9) histogram crosses zero on a 1-min bar opening 08:30–15:00 CT. The trade goes the other way: cross up → SELL, cross down → BUY |
+| Size | 4 lots |
+| Entry | Stop 0.15 ATR(14) beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
+| Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer |
+| Target | From the stop-entry, as far as the stop is on a flat day: 5.15 ATR, at most 75 points at 4 lots |
+| Exits | The bracket; the next cross, which flips the trade; flat at 15:05 CT |
+| Day | No new orders once the day is −$200 (breaker), +$250 (profit block) or at the −$600 limit |
+
+### Install
+
+1. In Tradovate, open the custom indicator code editor and create a new indicator.
+2. Paste the **entire** contents of `mnqMacdFade1250.js` and save.
+3. Add it to a 1-minute MNQ chart from the indicator list (tagged **MNQ bot**).
+
+### Chart setup
+
+- **Include the overnight session.** The MACD and ATR run over every bar. An RTH-only chart computes different crosses near the open.
+- **Load at least one full day**, so the MACD has a few hundred bars behind it.
+- **To see the crosses**, add Tradovate's built-in MACD (12, 26, 9) in a pane below. Its zero crosses should line up with the signals once enough bars are loaded (not checked inside Tradovate).
+- **One check on first load:** a signal should sit on the candle where the histogram changed sign. If everything looks one candle late, turn on `barTimeIsClose`.
+
+### Reading it
+
+| On the chart | Meaning |
+|---|---|
+| `▲ BUY 4` / `▼ SELL 4` | A cross, and the order it places. `▲ BUY` fades a cross down |
+| `· flip` | Reverses the open trade |
+| `· cancels sell stop` | The stop-entry resting the other way is cancelled at the next open |
+| `▼ · closes trade` | Closes the open trade at the next open but places no new order (too late in the session, or that trade's result ends the day) |
+| bare `▲` / `▼` | A cross after 14:55 CT: no new order |
+| gold, red and green lines | Stop-entry, stop and target, starting **on the signal candle**. `· day limit` when the $600 line sets the stop |
+| `● SOLD 4 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
+| `TP`, `SL`, `FLIP`, `FLAT` with dollars | The exit and the trade's dollars (after $0.75/side commission, no slippage) |
+| `DAY DONE +$312 (profit block)` | The day is done. Later crosses that day are not drawn |
+| `no fill` / `cancelled` | A stop-entry that expired, or that the next cross cancelled |
+
+Most trades end at the next cross (`FLIP`): 148 of 236 in 2026. Expect one to three trades on most days, because the +$250 profit block or the breaker usually ends the day early.
+
+### The day rules
+
+The same as `mnqDonchian1250.js` ([above](#the-day-rules)), with a −$200 breaker: the day's P&L comes from its own trades, and it cannot see anything else trading the account.
+
+### Notes
+
+- Verified outside Tradovate on seven years of MNQ data. In research mode it reproduces every trade of the research engine, day rules included (8,234 of 8,234), and the 2026 pass rate rebuilt from its own trades is the same 58.5%.
+- A flip's new order is drawn on the signal candle using that candle's close, but the flip itself happens at the next open. When the $600 line sets the stop, the stop can move by the gap between the two (usually 0–2 ticks).
+- Place the orders as the lines appear: one bar of entry delay cut the 2026 pass rate to 52.7%.
+- Not verified inside Tradovate itself (label placement). If labels look misplaced, turn off `showLineLabels`.
+- The settings were chosen on 2026 alone (139 sessions), so treat the pass rate as an estimate with a wide margin.
 
 ## `evidenceSRLevels.js` — Evidence-based S/R levels
 
