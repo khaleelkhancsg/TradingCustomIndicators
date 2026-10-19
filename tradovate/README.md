@@ -119,18 +119,24 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **61.3
 
 ## `mnqMacdFade1250.js` — MNQ MACD fade for a $1,250-target evaluation
 
-A custom indicator for a **1-minute MNQ chart**, for the same evaluation rules. It trades against every 1-minute MACD cross during RTH: a cross up is a sell, a cross down is a buy. It is the runner-up to `mnqDonchian1250.js`, and the opposite kind of trade: it fades short pushes instead of following breakouts.
+A custom indicator for a **1-minute MNQ chart**, for the same evaluation rules. It trades against short pushes. When the 1-minute MACD histogram crosses zero during RTH, it takes the other side (a cross up is a sell, a cross down a buy), but only on the crosses that tend to reverse.
 
-On 2026 data (same costs) it passed **58.5%** of 21-day windows (Jan–Mar 52.4%, Apr–Jul 68.5%) and made money in every month. On the actual calendar windows of 2026 it passed 46%, against the Donchian's 60%, because its January–March was weaker.
+On 2026 data (same costs) it passed **67.7%** of 21-day windows (Jan–Mar 64.8%, Apr–Jul 73.8%). That compares with 58.6% for fading every cross, and 61.3% for `mnqDonchian1250.js`. On the actual calendar windows of 2026 it passed 57.1%.
+
+### Which crosses it fades, and why
+
+- **Weak crosses only.** A cross is weak when the MACD line is already on the fade's side of zero: the cross is a bounce against the short-term trend. A strong cross, with the line on the same side, is the trend resuming. That is persistent buying or selling, and it keeps going. In 2026, fading strong crosses lost $10 a trade; fading only weak ones made $66.
+- **Only when the market is moving.** The 1-minute ATR must be at least the average ATR of the previous 10 sessions' 08:30–15:00 bars. A fade is paid for absorbing a burst of one-sided orders, and that pays when volatility is high. In quiet conditions, fades lost $23 a trade.
+- **Every cross still exits.** A strong or quiet cross closes an open trade at the next open and cancels a resting order the other way. It just doesn't place a new order.
 
 | Rule | |
 |---|---|
-| Signal | The MACD(12, 26, 9) histogram crosses zero on a 1-min bar opening 08:30–15:00 CT. The trade goes the other way: cross up → SELL, cross down → BUY |
+| Signal | The MACD(12, 26, 9) histogram crosses zero on a 1-min bar opening 08:30–15:00 CT, the cross is weak, and the ATR is at least its 10-session average. The trade goes the other way: cross up → SELL, cross down → BUY |
 | Size | 4 lots |
 | Entry | Stop 0.15 ATR(14) beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
 | Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer |
 | Target | From the stop-entry, as far as the stop is on a flat day: 5.15 ATR, at most 75 points at 4 lots |
-| Exits | The bracket; the next cross, which flips the trade; flat at 15:05 CT |
+| Exits | The next cross of any kind, at the next open, before that bar can touch the stop or target; the bracket; flat at 15:05 CT |
 | Day | No new orders once the day is −$200 (breaker), +$250 (profit block) or at the −$600 limit |
 
 ### Install
@@ -142,7 +148,7 @@ On 2026 data (same costs) it passed **58.5%** of 21-day windows (Jan–Mar 52.4%
 ### Chart setup
 
 - **Include the overnight session.** The MACD and ATR run over every bar. An RTH-only chart computes different crosses near the open.
-- **Load at least one full day**, so the MACD has a few hundred bars behind it.
+- **Load at least 11 sessions.** The volatility check compares with the previous 10 sessions. Until it has them, it lets every weak cross through.
 - **To see the crosses**, add Tradovate's built-in MACD (12, 26, 9) in a pane below. Its zero crosses should line up with the signals once enough bars are loaded (not checked inside Tradovate).
 - **One check on first load:** a signal should sit on the candle where the histogram changed sign. If everything looks one candle late, turn on `barTimeIsClose`.
 
@@ -150,18 +156,25 @@ On 2026 data (same costs) it passed **58.5%** of 21-day windows (Jan–Mar 52.4%
 
 | On the chart | Meaning |
 |---|---|
-| `▲ BUY 4` / `▼ SELL 4` | A cross, and the order it places. `▲ BUY` fades a cross down |
+| `▲ BUY 4` / `▼ SELL 4` | A cross it fades, and the order it places. `▲ BUY` fades a cross down |
 | `· flip` | Reverses the open trade |
 | `· cancels sell stop` | The stop-entry resting the other way is cancelled at the next open |
-| `▼ · closes trade` | Closes the open trade at the next open but places no new order (too late in the session, or that trade's result ends the day) |
-| bare `▲` / `▼` | A cross after 14:55 CT: no new order |
+| grey `▲ strong` / `▼ quiet` | A cross it does not fade. `strong` resumes the short-term trend; `quiet` came with below-normal volatility. With `· closes trade` it still exits the open trade, and with `· cancels sell stop` it cancels the resting order. `showSkipped` off hides the ones that do neither |
+| `▼ · closes trade` | A cross it would fade, but that places no new order (too late in the session, or that trade's result ends the day): it only exits |
+| bare `▲` / `▼` | A cross it would fade, after 14:55 CT: no new order |
 | gold, red and green lines | Stop-entry, stop and target, starting **on the signal candle**. `· day limit` when the $600 line sets the stop |
 | `● SOLD 4 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
 | `TP`, `SL`, `FLIP`, `FLAT` with dollars | The exit and the trade's dollars (after $0.75/side commission, no slippage) |
 | `DAY DONE +$312 (profit block)` | The day is done. Later crosses that day are not drawn |
 | `no fill` / `cancelled` | A stop-entry that expired, or that the next cross cancelled |
 
-Most trades end at the next cross (`FLIP`): 148 of 236 in 2026. Expect one to three trades on most days, because the +$250 profit block or the breaker usually ends the day early.
+Most trades end at the next cross (`FLIP`): 109 of 172 in 2026. Expect none to two trades on most days; the +$250 profit block or the breaker usually ends the day early.
+
+### Settings
+
+- `onlyWeakCrosses` (on) and `minVolRatio` (1, meaning ATR at least 1× its 10-session average; 0 turns it off) are the two filters. With both off it fades every cross, as the first version did (58.6% in 2026).
+- `contracts`, `dayLossLimit`, `breaker` and `profitBlock` are the size and the day rules.
+- `showSkipped`, `showLineLabels` and `showMarkers` control the labels.
 
 ### The day rules
 
@@ -169,11 +182,15 @@ The same as `mnqDonchian1250.js` ([above](#the-day-rules)), with a −$200 break
 
 ### Notes
 
-- Verified outside Tradovate on seven years of MNQ data. In research mode it reproduces every trade of the research engine, day rules included (8,234 of 8,234), and the 2026 pass rate rebuilt from its own trades is the same 58.5%.
+- Verified outside Tradovate on seven years of MNQ data:
+  - Which crosses it fades matches the research at every one of 57,712 crosses.
+  - In research mode it reproduces every trade of the research engine, day rules included (4,080 of 4,080).
+  - The 2026 pass rate rebuilt from its own trades is the same 67.7%.
 - A flip's new order is drawn on the signal candle using that candle's close, but the flip itself happens at the next open. When the $600 line sets the stop, the stop can move by the gap between the two (usually 0–2 ticks).
-- Place the orders as the lines appear: one bar of entry delay cut the 2026 pass rate to 52.7%.
+- **Place the orders as the lines appear.** One bar of entry delay cut the 2026 pass rate to 45% (49% for fading every cross). The filters make it more sensitive to late entries.
+- The weak-cross filter works only with the MACD line itself. Measuring "the trend" by VWAP, EMA 50/200, the 5-minute MACD or the opening drive made results worse.
 - Not verified inside Tradovate itself (label placement). If labels look misplaced, turn off `showLineLabels`.
-- The settings were chosen on 2026 alone (139 sessions), so treat the pass rate as an estimate with a wide margin.
+- The filters were chosen on 2026 alone (139 sessions), from about 150 variants. They held in both halves of 2026 and against random filters, but treat the pass rate as an estimate with a wide margin.
 
 ## `evidenceSRLevels.js` — Evidence-based S/R levels
 
