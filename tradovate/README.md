@@ -79,7 +79,7 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
 | Entry | Stop 0.15 ATR beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
 | Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer. At 4 lots that is nearly always the $600 line (about 75 points) |
 | Target | 1.75 ATR from the signal close |
-| Exits | The bracket; out at the next open if the trade is not +1 ATR by the 20th bar after entry (40 minutes); an opposite signal; flat at 15:06 CT (the first bar opening at or after 15:05), or at the last close of a session that ends early. The 40-minute exit and the opposite signal happen at the next open, before that bar can touch the stop or target |
+| Exits | The bracket; out at the next open if the trade is not +1 ATR by the 20th bar after entry (40 minutes); an opposite signal; flat at 15:06 CT (the first bar opening at or after 15:05), or earlier on an early close (see the notes). The 40-minute exit and the opposite signal happen at the next open, before that bar can touch the stop or target |
 | Day | No new orders once the day is −$300 (breaker), +$250 (profit block) or at the −$600 limit |
 
 ### Install
@@ -137,13 +137,13 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
   - Its 10-minute EMA direction matches the research's, built separately from 1-minute bars, on every 2-minute bar.
   - In research mode it reproduces every trade of the research engine, day rules included (2,450 of 2,450).
   - The 2026 pass rate rebuilt from its own trades is the same 71.1%.
-  - All 128 of its 2026 trades match the backtesting chart's book, to the cent, when that book runs the same 15:06 flat.
+  - All 128 of its 2026 trades match the backtesting chart's book, to the cent.
   - Every order's lines start on its signal candle, at the exact prices the order then rests at.
   - Every 2026 reading and refusal it prints (214 orders, 840 refused breakouts) matches the chart's own explanation of that bar.
 
   The research and verification files named in the code's header live in my separate backtesting project.
 - **Flat at 15:06.** The first version drew the flat at 15:04. The research measured 15:06 and the bot trades it, so the indicator now does too.
-- **Early closes.** A trade still open when a session ends early now goes out at that session's last close, and its dollars stay on that day. Before, it ran to the next session's open and counted on the next day, which could wrongly end that day. No trade in the 2026 test data was open at an early close, so the 2026 results don't change.
+- **Early closes.** Topstep liquidates anything still open 15 minutes before an early close. On those days (the `EARLY` list near the top of the code: Nov 26, Nov 27 and Dec 24 2026) the indicator does what the bot does: no new order from 15 minutes before the cutoff, flat from 5 before it. Add each year's dates from Topstep's holiday hours page. A session that ends early without being on the list goes out at its last close, and its dollars stay on that day. No trade in the 2026 test data was open at an early close, so the 2026 results don't change.
 - **Exit order.** A trade the 40-minute exit or an opposite signal closes goes out at the next open, before that bar can touch the stop or target; only a gap through the stop at the open comes first. The first version checked the stop and target first. Correcting it moved the 2026 result by under 0.1 point with the filter, and 0.4 without.
 - **Place the orders as the lines appear.** One bar of entry delay cut the 2026 pass rate to 57.5% (51.8% without the filter).
 - **Not verified inside Tradovate itself.** The label placement uses Tradovate's pixel offsets and left/right text alignment. If labels look misplaced, turn off `showLineLabels`; the lines and markers still draw.
@@ -170,7 +170,7 @@ On 2026 data (same costs) it passed **67.7%** of 21-day windows (Jan–Mar 64.8%
 | Entry | Stop 0.15 ATR(14) beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
 | Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer |
 | Target | From the stop-entry, as far as the stop is on a flat day: 5.15 ATR, at most 75 points at 4 lots |
-| Exits | The next cross of any kind, at the next open, before that bar can touch the stop or target; the bracket; flat at 15:05 CT, or at the last close of a session that ends early |
+| Exits | The next cross of any kind, at the next open, before that bar can touch the stop or target; the bracket; flat at 15:05 CT, or earlier on an early close |
 | Day | No new orders once the day is −$200 (breaker), +$250 (profit block) or at the −$600 limit |
 
 ### Install
@@ -223,7 +223,7 @@ The same as `mnqDonchian1250.js` ([above](#the-day-rules)), with a −$200 break
   - The 2026 pass rate rebuilt from its own trades is the same 67.7%.
   - All 172 of its 2026 trades match the backtesting chart's book, to the cent.
   - Every 2026 reading and refusal it prints (232 orders, 446 grey crosses) matches the chart's own explanation of that bar.
-- **Early closes.** As in `mnqDonchian1250.js`, a trade still open when a session ends early goes out at that session's last close, on that day's books.
+- **Early closes.** As in `mnqDonchian1250.js`: no new order from 15 minutes before Topstep's cutoff, flat from 5 before it.
 - A flip's new order is drawn on the signal candle using that candle's close, but the flip itself happens at the next open. When the $600 line sets the stop, the stop can move by the gap between the two (usually 0–2 ticks).
 - **Place the orders as the lines appear.** One bar of entry delay cut the 2026 pass rate to 45% (49% for fading every cross). The filters make it more sensitive to late entries.
 - The weak-cross filter works only with the MACD line itself. Measuring "the trend" by VWAP, EMA 50/200, the 5-minute MACD or the opening drive made results worse.
