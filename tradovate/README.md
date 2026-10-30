@@ -106,9 +106,9 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
 | `· flip` | Reverses an open trade |
 | grey `▲ vs 10m trend` | A breakout against the 10-minute EMA trend: not traded. With `· closes trade` it still exits the open trade, and with `· cancels sell stop` it cancels the resting order. `showSkipped` off hides the ones that do neither |
 | `▼ · closes trade` | Closes the open trade at the next open but places no new order (too late in the session, or that trade's result ends the day) |
-| `▲ · in trade` / `▲ · too late` | A signal that places nothing: already in that trade, or too late in the session |
-| `ADX 39 · eff 0.53 · 10m up · range 58%` | Under an order (`showWhy`): the readings its rules used. ADX 25 or more, efficiency 0.5 or more (`+ trend` when the slow trend rescued it at 0.45–0.5), the 10-minute EMA direction, and how much of its usual range the day has covered (90% or more halves the size). Rounded down, so a reading never prints on the wrong side of its rule |
-| `30-bar high 29120.50` + short thick line | The level the close broke, from the bar that set it to the signal bar (`showWhy`) |
+| bare `▲` / `▼`, `▲ · too late` | A signal that places nothing: already in that trade, or too late in the session |
+| `ADX 39 · eff 0.53 · 10m up · range 58%` | Under the first order of a run of breakouts (`showWhy`): the readings its rules used. ADX 25 or more, efficiency 0.5 or more (`+ trend` when the slow trend rescued it at 0.45–0.5), the 10-minute EMA direction, and how much of its usual range the day has covered (90% or more halves the size). Rounded down, so a reading never prints on the wrong side of its rule |
+| `30-bar high 29120.50` + short thick line | The level the close broke, from the bar that set it to the signal bar (`showWhy`, on that same first order) |
 | grey `× ADX 21 · eff 0.42` | A close outside the channel that is **not** a signal, and what refused it: ADX under 25, or efficiency under 0.5. `vs trend` means efficiency was 0.45–0.5 but the slow trend pointed the other way. Only the first bar of a run outside the channel is marked, about 6 a session. It places nothing and changes nothing (`showSkipped`) |
 | blue and purple lines | The 10-minute EMA 9 and 21 (`showEma`) |
 | gold line + `BUY STOP` | The stop-entry: signal close ± 0.15 ATR. Starts **on the signal candle** |
@@ -196,7 +196,7 @@ On 2026 data (same costs) it passed **67.7%** of 21-day windows (Jan–Mar 64.8%
 | `cross down · line +26.90 · ATR 1.18×` | Under an order (`showWhy`): the readings its rules used. The cross it fades, the MACD line (on the fade's side of zero: a bounce against the short-term trend), and the ATR as a multiple of its 10-session average (1× or more: the market is moving; rounded down) |
 | grey `▲ strong` / `▼ quiet` | A cross it does not fade. `strong` resumes the short-term trend; `quiet` came with below-normal volatility. With `showWhy` it adds the reading that refused it: `· line +3.36` or `· ATR 0.87×`, or both. With `· closes trade` it still exits the open trade, and with `· cancels sell stop` it cancels the resting order. `showSkipped` off hides the ones that do neither |
 | `▼ · closes trade` | A cross it would fade, but that places no new order (too late in the session, or that trade's result ends the day): it only exits |
-| `▲ · too late` | A cross it would fade, after 14:55 CT: no new order |
+| `▲ · too late` | A cross it would fade, after 14:55 CT: no new order. A bare `▲` is one the same way as the open trade |
 | gold, red and green lines | Stop-entry, stop and target, starting **on the signal candle**. `· day limit` when the $600 line sets the stop |
 | `● SOLD 4 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
 | `TP`, `SL`, `FLIP`, `FLAT` with dollars | The exit and the trade's dollars (after $0.75/side commission, no slippage). `FLAT early close`: the session ended before the flat time, so the trade goes out at its last close, on that day's books |
