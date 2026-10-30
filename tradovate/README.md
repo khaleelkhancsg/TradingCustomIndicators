@@ -57,9 +57,11 @@ A signal the bot skipped is usually one of those.
 
 ## `mnqDonchian1250.js` — MNQ Donchian for a $1,250-target evaluation
 
-A custom indicator for a **2-minute MNQ chart**, built for an evaluation with a **$1,250 profit target, $1,000 trailing maximum loss, $600 daily loss limit and a 50% consistency rule**. It uses the same breakout signal as `mnqDonchianBot.js`, with the smaller size and tighter day rules those account rules reward. On top of that, it only trades breakouts that go with the 10-minute EMA trend. Unlike `mnqDonchianBot.js`, it adds up the day's P&L from its own trades, so it applies the day rules and shows when the day is done.
+A custom indicator for a **2-minute MNQ chart**, built for an evaluation with a **$1,250 profit target, $1,000 trailing maximum loss, $600 daily loss limit and a 50% consistency rule**. It uses the same breakout signal as `mnqDonchianBot.js`, with the smaller size and tighter day rules those account rules reward. On top of that, it only trades breakouts that go with the 10-minute EMA trend. Unlike `mnqDonchianBot.js`, it adds up the day's P&L from its own trades, so it applies the day rules and shows when the day is done. My $1,250 bot trades these same rules, and this draws them on the chart.
 
-On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1%** of 21-day windows (Jan–Mar 74.3%, Apr–Jul 75.1%), against 61.3% without the EMA filter. On the actual calendar windows of 2026 it passed 74.8%.
+It also shows **why**: the readings behind each order, the level the close broke, and the reason a close outside the channel was not a signal.
+
+On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1%** of 21-day windows (Jan–Mar 74.3%, Apr–Jul 75.1%), against 61.3% without the EMA filter. On the actual calendar windows of 2026 it passed 74.8%. Forward on TopstepX bars, Sep 10 – Oct 26 2026, it made +$2,532 over 23 trades, and all 17 calendar windows passed.
 
 ### The 10-minute EMA filter
 
@@ -77,7 +79,7 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
 | Entry | Stop 0.15 ATR beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
 | Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer. At 4 lots that is nearly always the $600 line (about 75 points) |
 | Target | 1.75 ATR from the signal close |
-| Exits | The bracket; out at the next open if the trade is not +1 ATR by the 20th bar after entry (40 minutes); an opposite signal; flat at 15:04 CT. The 40-minute exit and the opposite signal happen at the next open, before that bar can touch the stop or target |
+| Exits | The bracket; out at the next open if the trade is not +1 ATR by the 20th bar after entry (40 minutes); an opposite signal; flat at 15:06 CT (the first bar opening at or after 15:05), or at the last close of a session that ends early. The 40-minute exit and the opposite signal happen at the next open, before that bar can touch the stop or target |
 | Day | No new orders once the day is −$300 (breaker), +$250 (profit block) or at the −$600 limit |
 
 ### Install
@@ -104,13 +106,16 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
 | `· flip` | Reverses an open trade |
 | grey `▲ vs 10m trend` | A breakout against the 10-minute EMA trend: not traded. With `· closes trade` it still exits the open trade, and with `· cancels sell stop` it cancels the resting order. `showSkipped` off hides the ones that do neither |
 | `▼ · closes trade` | Closes the open trade at the next open but places no new order (too late in the session, or that trade's result ends the day) |
-| bare `▲` / `▼` | A signal that places nothing: already in that trade, or too late in the session |
+| `▲ · in trade` / `▲ · too late` | A signal that places nothing: already in that trade, or too late in the session |
+| `ADX 39 · eff 0.53 · 10m up · range 58%` | Under an order (`showWhy`): the readings its rules used. ADX 25 or more, efficiency 0.5 or more (`+ trend` when the slow trend rescued it at 0.45–0.5), the 10-minute EMA direction, and how much of its usual range the day has covered (90% or more halves the size). Rounded down, so a reading never prints on the wrong side of its rule |
+| `30-bar high 29120.50` + short thick line | The level the close broke, from the bar that set it to the signal bar (`showWhy`) |
+| grey `× ADX 21 · eff 0.42` | A close outside the channel that is **not** a signal, and what refused it: ADX under 25, or efficiency under 0.5. `vs trend` means efficiency was 0.45–0.5 but the slow trend pointed the other way. Only the first bar of a run outside the channel is marked, about 6 a session. It places nothing and changes nothing (`showSkipped`) |
 | blue and purple lines | The 10-minute EMA 9 and 21 (`showEma`) |
 | gold line + `BUY STOP` | The stop-entry: signal close ± 0.15 ATR. Starts **on the signal candle** |
 | red line + `SL`, green line + `TP` | The bracket, at the tick prices the orders rest at. `· day limit` when the $600 line sets the stop |
 | `● BOUGHT 4 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
 | orange line | The 40-minute checkpoint: fill ± 1 ATR |
-| `TP +$324`, `SL -$594 · day limit`, `TIME 40m -$84`, `FLIP`, `FLAT` | The exit and the trade's dollars (after $0.75/side commission, no slippage) |
+| `TP +$324`, `SL -$594 · day limit`, `TIME 40m -$84`, `FLIP`, `FLAT` | The exit and the trade's dollars (after $0.75/side commission, no slippage). `FLAT early close`: the session ended before the flat time, so the trade goes out at its last close, on that day's books |
 | `DAY DONE +$324 (profit block)` | The day is done: profit block, breaker or daily limit. Later signals that day are not drawn |
 | `no fill` / `cancelled` | A stop-entry that expired, or that an opposite signal cancelled |
 
@@ -118,7 +123,7 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
 
 - **The filter:** `emaFilter` (on), plus `emaTf` (10 minutes, whole 2-minute bars, so an even number), `emaFast` (9) and `emaSlow` (21). With `emaFilter` off it trades every breakout, as the first version did (60.9% in 2026).
 - **Size and day rules:** `contracts`, `lateContracts`, `dayLossLimit`, `breaker` and `profitBlock`. 0 turns the breaker or the profit block off.
-- **Display:** `showEma`, `showSkipped`, `showChannel`, `showTrend`, `showMarkers`, `showLineLabels` and `showCheckpoint`.
+- **Display:** `showWhy` (the readings and the broken level), `showSkipped` (the grey marks: refused breakouts and breakouts against the 10-minute trend), `showEma`, `showChannel`, `showTrend`, `showMarkers`, `showLineLabels` and `showCheckpoint`.
 
 ### The day rules
 
@@ -132,9 +137,13 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
   - Its 10-minute EMA direction matches the research's, built separately from 1-minute bars, on every 2-minute bar.
   - In research mode it reproduces every trade of the research engine, day rules included (2,450 of 2,450).
   - The 2026 pass rate rebuilt from its own trades is the same 71.1%.
+  - All 128 of its 2026 trades match the backtesting chart's book, to the cent, when that book runs the same 15:06 flat.
   - Every order's lines start on its signal candle, at the exact prices the order then rests at.
+  - Every 2026 reading and refusal it prints (214 orders, 840 refused breakouts) matches the chart's own explanation of that bar.
 
   The research and verification files named in the code's header live in my separate backtesting project.
+- **Flat at 15:06.** The first version drew the flat at 15:04. The research measured 15:06 and the bot trades it, so the indicator now does too.
+- **Early closes.** A trade still open when a session ends early now goes out at that session's last close, and its dollars stay on that day. Before, it ran to the next session's open and counted on the next day, which could wrongly end that day. No trade in the 2026 test data was open at an early close, so the 2026 results don't change.
 - **Exit order.** A trade the 40-minute exit or an opposite signal closes goes out at the next open, before that bar can touch the stop or target; only a gap through the stop at the open comes first. The first version checked the stop and target first. Correcting it moved the 2026 result by under 0.1 point with the filter, and 0.4 without.
 - **Place the orders as the lines appear.** One bar of entry delay cut the 2026 pass rate to 57.5% (51.8% without the filter).
 - **Not verified inside Tradovate itself.** The label placement uses Tradovate's pixel offsets and left/right text alignment. If labels look misplaced, turn off `showLineLabels`; the lines and markers still draw.
@@ -142,9 +151,11 @@ On 2026 data (1 tick of slippage a side, $0.75/side commission) it passed **71.1
 
 ## `mnqMacdFade1250.js` — MNQ MACD fade for a $1,250-target evaluation
 
-A custom indicator for a **1-minute MNQ chart**, for the same evaluation rules. It trades against short pushes. When the 1-minute MACD histogram crosses zero during RTH, it takes the other side (a cross up is a sell, a cross down a buy), but only on the crosses that tend to reverse.
+A custom indicator for a **1-minute MNQ chart**, for the same evaluation rules. It trades against short pushes. When the 1-minute MACD histogram crosses zero during RTH, it takes the other side (a cross up is a sell, a cross down a buy), but only on the crosses that tend to reverse. Like the Donchian, it shows why: the readings behind each order, and what refused each cross it did not fade.
 
 On 2026 data (same costs) it passed **67.7%** of 21-day windows (Jan–Mar 64.8%, Apr–Jul 73.8%). That compares with 58.6% for fading every cross, and 71.1% for `mnqDonchian1250.js`. On the actual calendar windows of 2026 it passed 57.1%.
+
+**It has not held up.** Forward on TopstepX bars, Sep 10 – Oct 26 2026, it lost $2,160 over 56 trades and passed 17.6% of calendar windows, below its coin-flip twin. `mnqDonchian1250.js` made +$2,532 over the same stretch. Treat the 2026 figures as a regime, not an edge; on these rules the Donchian alone is the better choice.
 
 ### Which crosses it fades, and why
 
@@ -159,7 +170,7 @@ On 2026 data (same costs) it passed **67.7%** of 21-day windows (Jan–Mar 64.8%
 | Entry | Stop 0.15 ATR(14) beyond the signal close, live for 10 bars. If price is already through it, the same price goes in as a limit |
 | Stop | 5 ATR from the signal close, or the price where the day would reach −$600 after commission, whichever is nearer |
 | Target | From the stop-entry, as far as the stop is on a flat day: 5.15 ATR, at most 75 points at 4 lots |
-| Exits | The next cross of any kind, at the next open, before that bar can touch the stop or target; the bracket; flat at 15:05 CT |
+| Exits | The next cross of any kind, at the next open, before that bar can touch the stop or target; the bracket; flat at 15:05 CT, or at the last close of a session that ends early |
 | Day | No new orders once the day is −$200 (breaker), +$250 (profit block) or at the −$600 limit |
 
 ### Install
@@ -182,12 +193,13 @@ On 2026 data (same costs) it passed **67.7%** of 21-day windows (Jan–Mar 64.8%
 | `▲ BUY 4` / `▼ SELL 4` | A cross it fades, and the order it places. `▲ BUY` fades a cross down |
 | `· flip` | Reverses the open trade |
 | `· cancels sell stop` | The stop-entry resting the other way is cancelled at the next open |
-| grey `▲ strong` / `▼ quiet` | A cross it does not fade. `strong` resumes the short-term trend; `quiet` came with below-normal volatility. With `· closes trade` it still exits the open trade, and with `· cancels sell stop` it cancels the resting order. `showSkipped` off hides the ones that do neither |
+| `cross down · line +26.90 · ATR 1.18×` | Under an order (`showWhy`): the readings its rules used. The cross it fades, the MACD line (on the fade's side of zero: a bounce against the short-term trend), and the ATR as a multiple of its 10-session average (1× or more: the market is moving; rounded down) |
+| grey `▲ strong` / `▼ quiet` | A cross it does not fade. `strong` resumes the short-term trend; `quiet` came with below-normal volatility. With `showWhy` it adds the reading that refused it: `· line +3.36` or `· ATR 0.87×`, or both. With `· closes trade` it still exits the open trade, and with `· cancels sell stop` it cancels the resting order. `showSkipped` off hides the ones that do neither |
 | `▼ · closes trade` | A cross it would fade, but that places no new order (too late in the session, or that trade's result ends the day): it only exits |
-| bare `▲` / `▼` | A cross it would fade, after 14:55 CT: no new order |
+| `▲ · too late` | A cross it would fade, after 14:55 CT: no new order |
 | gold, red and green lines | Stop-entry, stop and target, starting **on the signal candle**. `· day limit` when the $600 line sets the stop |
 | `● SOLD 4 @ price` | The fill (`(limit)` when a refused stop was re-placed as a limit) |
-| `TP`, `SL`, `FLIP`, `FLAT` with dollars | The exit and the trade's dollars (after $0.75/side commission, no slippage) |
+| `TP`, `SL`, `FLIP`, `FLAT` with dollars | The exit and the trade's dollars (after $0.75/side commission, no slippage). `FLAT early close`: the session ended before the flat time, so the trade goes out at its last close, on that day's books |
 | `DAY DONE +$312 (profit block)` | The day is done. Later crosses that day are not drawn |
 | `no fill` / `cancelled` | A stop-entry that expired, or that the next cross cancelled |
 
@@ -197,7 +209,7 @@ Most trades end at the next cross (`FLIP`): 109 of 172 in 2026. Expect none to t
 
 - `onlyWeakCrosses` (on) and `minVolRatio` (1, meaning ATR at least 1× its 10-session average; 0 turns it off) are the two filters. With both off it fades every cross, as the first version did (58.6% in 2026).
 - `contracts`, `dayLossLimit`, `breaker` and `profitBlock` are the size and the day rules.
-- `showSkipped`, `showLineLabels` and `showMarkers` control the labels.
+- `showWhy`, `showSkipped`, `showLineLabels` and `showMarkers` control the labels.
 
 ### The day rules
 
@@ -209,6 +221,9 @@ The same as `mnqDonchian1250.js` ([above](#the-day-rules)), with a −$200 break
   - Which crosses it fades matches the research at every one of 57,712 crosses.
   - In research mode it reproduces every trade of the research engine, day rules included (4,080 of 4,080).
   - The 2026 pass rate rebuilt from its own trades is the same 67.7%.
+  - All 172 of its 2026 trades match the backtesting chart's book, to the cent.
+  - Every 2026 reading and refusal it prints (232 orders, 446 grey crosses) matches the chart's own explanation of that bar.
+- **Early closes.** As in `mnqDonchian1250.js`, a trade still open when a session ends early goes out at that session's last close, on that day's books.
 - A flip's new order is drawn on the signal candle using that candle's close, but the flip itself happens at the next open. When the $600 line sets the stop, the stop can move by the gap between the two (usually 0–2 ticks).
 - **Place the orders as the lines appear.** One bar of entry delay cut the 2026 pass rate to 45% (49% for fading every cross). The filters make it more sensitive to late entries.
 - The weak-cross filter works only with the MACD line itself. Measuring "the trend" by VWAP, EMA 50/200, the 5-minute MACD or the opening drive made results worse.
