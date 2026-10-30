@@ -300,7 +300,7 @@ On bars coarser than 1 minute, the indicator uses Tradovate's per-bar volume-at-
 - **Method.** Each real level was scored against 4 random "twin" levels at the same time of day, using a day-clustered bootstrap and about 470k touches per run. This follows Osler's method.
 - **Excluded.** Order blocks, fair value gaps, swing highs/lows, RTH VWAP, LVNs and VAH/VAL were no better than random, so they're left out. Order blocks were tested as a break of structure plus a displacement candle, with the last opposite candle as the block.
 - **These are context levels, not a strategy.** The best hold level nets about $1–2 per touch after costs. Breakouts through the break-prone levels come out around breakeven.
-- **2026 is too thin to confirm the hold edge**, with only about 35–70 POC/HVN touches. The round-number and overnight-high break effect did hold in 2026.
+- **2026 alone does not support the hold or break groups.** Stress-tested in the chart lab (2026-10-30) with touches matched by side and time of day, 100 random-market placebos per level, and 32 forward sessions, Sep 11 – Oct 26. Prior POCs came in at +0.9 pp (95% CI about −5 to +6), HVNs −1.4 (−6 to +3), prior-day high/low −2.0, overnight high/low −4.0, all inside the noise. Round 100s and 500s were the one signal, −5.5 (−10 to −2), and that went to −0.3 forward. A pool of levels needs about 7 pp to show on this sample, so this does not overturn the 5-year figures above. It does mean the labels are reference lines, not a forecast for the current market.
 - **Only the Session scale was tested.** Week and Month apply the same definitions to longer periods but haven't been measured.
 
 ### Notes

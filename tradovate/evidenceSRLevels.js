@@ -28,6 +28,13 @@
  *  Tested and NOT included, no better than random: order blocks, fair
  *  value gaps, 5-min/1-hour swing highs/lows, RTH VWAP, LVNs, VAH/VAL.
  *
+ * 2026 ALONE does not support these groups. Stress-tested 2026-10-30, matched by side
+ * and time of day, against 100 random-market placebos and 32 forward sessions: POCs
+ * +0.9pp, HVNs -1.4, prior-day high/low -2.0, overnight high/low -4.0, all inside the
+ * noise; round 100s and 500s -5.5, then -0.3 forward. A group needs about 7pp to show
+ * on this sample, so the 5-year figures above stand, but read these as reference
+ * lines, not a forecast.
+ *
  * LEVEL SCALE follows the chart timeframe (detected from bar timestamps):
  *    <= 30 min bars   SESSION  prior day, overnight, 5-session POC, 20-session HVNs
  *    1H - 4H bars     WEEK     prior week, 4-week POC, 12-week HVNs
