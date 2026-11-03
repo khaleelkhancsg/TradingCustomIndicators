@@ -307,3 +307,105 @@ On bars coarser than 1 minute, the indicator uses Tradovate's per-bar volume-at-
 
 - Verified outside Tradovate. On 12 real days from 2021 to 2026, the 1-minute levels are identical to the research code. Live-bar updates don't double-count. 5m, 15m, 30m, 1H, 4H and daily charts pick the right scale, and every drawn line carries a label. The research and test files live in my separate `tradovate_levels` project.
 - Not verified inside Tradovate itself. The shaded zones, label alignment, dashed styles and the volume-at-price request are written from Tradovate's API docs. If labels look misplaced, try `labelSide`, `labelOffsetPx`, or turn off `showLabels`; the lines still draw.
+
+## `cammyValueLevels.js` — Cammy Capital's volume profile levels
+
+A custom indicator for a **1-minute chart** that draws what Cammy Capital's volume profile strategy is built on, as the 44 videos of their [Order Flow](https://www.youtube.com/playlist?list=PLyPfiwj3BtkwqVG-WBA2kNWr-S5AcT3zW) and [Volume Profile](https://www.youtube.com/playlist?list=PLyPfiwj3Btkz8PqJeXUOO7mPKLGtgWwy-) playlists set it out. It never signals a trade. It draws the levels, works out the facts the strategy states as rules (first taps, stacked levels, the 30-minute wait), and labels every call Cammy makes by eye as yours. The checklist below is the strategy's process, in order. In the code and here, `VP 14` means video 14 of the Volume Profile Series and `OF 5` video 5 of the Order Flow Series.
+
+### Install
+
+1. In Tradovate, open the custom indicator code editor and create a new indicator.
+2. Paste the **entire** contents of `cammyValueLevels.js` and save.
+3. Add it to a 1-minute chart from the indicator list (tagged **Volume profile**).
+
+### Chart setup
+
+- **1-minute bars, overnight session included.** The overnight and developing profiles need the overnight bars, and the profiles are built the way Cammy draws them, on a 1-minute chart. Other intraday sizes work if they have a bar at 09:30 ET.
+- **Load at least two weeks.** The previous week's profile needs that week from its Sunday 18:00 open; until it is loaded, the orange lines don't draw.
+- **One check on first load:** the white lines should change at 16:00 ET and the orange ones at the Sunday open. The clock checks itself against CME's 18:00 reopen, so local-time or bar-close stamps still land right once a reopen is in the history.
+- **Set `stackTicks` for your market.** Cammy never says how close levels must be to stack. The default follows the examples in the videos: 16 ticks (4 points) on NQ/MNQ, 6 ticks (1.5 points) on ES/MES, 8 ticks otherwise.
+- **In a roll week, chart the contract you trade.** The weekly profile mixes contracts on a continuous chart that is not roll-adjusted.
+
+### Reading it
+
+| On the chart | Meaning |
+|---|---|
+| orange lines | Previous week (Sunday 18:00 → Friday 17:00): VAH, POC (thicker), VAL. All week [VP 10] |
+| white lines | Previous day: the latest regular session, 09:30 → 16:00, until the next 16:00 close, overnight included [VP 10] |
+| lavender dashed | Overnight, 18:00 → 09:29, drawn in the New York session [VP 4, 20] |
+| blue lines, red line | The developing profile's VAH and VAL, and its POC, bar by bar: from 18:00 overnight (or 16:00 with `overnightStart`), from 09:30 in New York [VP 10, 26] |
+| blue histogram | The developing profile, from its session's first bar. Brighter rows are the value area, red is the POC row. Read nodes, shelves, edges and the shape here |
+| `1st PD VAL` | The first touch of a level this session. `x2` means it sat in a stack at that moment [VP 4, 5, 14] |
+| yellow zone, `STACK x3` | Levels of different profiles within `stackTicks` of each other [VP 3, 13, 22] |
+| dotted line, `09:30 New York profile starts`, `10:00 formed (30 min)` | The developing profile's start, and the end of the 30 minutes Cammy lets it form [VP 19, 20] |
+| labels at the right | Each level, with `(untapped)` or `(1st tap 10:42)` for this session |
+| panel, top left | The session and whether its profile has formed; where the session opened and where price is now against each profile (premium, discount, above VAH, below VAL); how far developing value has moved since it formed; the untapped levels; the next levels above and below; the stacks now. The last line, in orange, is what stays yours |
+
+VAH is premium, POC fair value, VAL discount; above the POC is already premium and below it discount [VP 12, 21].
+
+### What is a rule here, and what stays yours
+
+Drawn or worked out, because the strategy states them as rules:
+- the four profiles, their windows and value areas;
+- the first tap of each previous-week, previous-day and overnight level in the session;
+- which levels of different profiles sit together, and how many;
+- the 30 minutes before a developing profile counts;
+- where price opened and where it is against each profile's value, and how far value has moved;
+- the opposing levels above and below.
+
+Left to you, because Cammy judges them by eye:
+- whether price holds or fails at fair value, and so which side to trade;
+- which nodes, shelves and edges count, and the profile's shape;
+- whether a level has broken and whether its retest holds;
+- what else adds to a grade: a node, an edge, the context;
+- the entry, stop, target and size.
+
+### The checklist
+
+**Before the session**
+- [ ] 1-minute chart, two weeks loaded, white lines changing at 16:00 ET and orange at the Sunday open.
+- [ ] The day's risk set: about 10% of the account's drawdown, 20% at most [VP 9, 18]. Stop after one win, or after two losses [VP 26]; lock out at your daily loss or after a good win [VP 30].
+
+**Which side** (the panel gives the facts; the read is yours)
+- [ ] Where did the session open against the previous day's value? (panel: *Opened*)
+- [ ] At the previous day's POC: held or reclaimed → look for longs; failed below, or rejected from underneath → look for shorts [VP 13, 17, 24, 25, 26].
+- [ ] At a VAH or VAL: broken with no one defending it → trade the retest that way; a clean rejection → fade back into value [VP 22, 25, 26].
+- [ ] Is developing value moving? (panel: *Developing value since*) Yesterday's fair value or premium becoming today's discount = buy there; overnight fair value becoming today's premium = sell there [VP 12, 20, 25].
+- [ ] No trade into a higher-timeframe level [OF 5]; no fading a level with a node building under it [VP 17].
+
+**The setup**
+- [ ] At least 30 minutes since the developing profile started (chart: *formed*) [VP 19, 20].
+- [ ] Which one: first tap of a value edge; break and retest; stacked levels; the edges of a balanced (D-shaped) profile; the range around a POC, taking profit at the POC; node to node [VP 4, 13, 14, 23, 29].
+- [ ] Is it the level's first tap? (labels: *untapped*) [VP 4, 5, 14]
+- [ ] Grade it: the stacked levels (chart: *STACK xN*) plus any node, edge or context you count. 3 or more = A, full risk; 2 = B, half; 1 = C, a quarter, and Cammy says to aim for 2 or more [VP 13, 14, 20].
+
+**The order**
+- [ ] A limit order at the level, on the first tap, with no candle confirmation [VP 14].
+- [ ] Stop behind the nearest high-volume node ("sandbagging"), behind the stack, or just past fair value; in a range, outside it [VP 5, 13, 19, 20, 24, 25].
+- [ ] Target 1:1, or the opposing value level (panel: *Next above/below*). Take most off at a POC rather than hold through it [VP 3, 4, 5, 12, 14].
+
+**Managing it**
+- [ ] A trades: most off at the first target, stop to breakeven, one or two runners to the next level [VP 12, 13, 18].
+- [ ] Add to a winner at a level, never to a loser [VP 18].
+- [ ] Journal the grade and the result.
+
+### Settings
+
+| Setting | Default | |
+|---|---|---|
+| `tickSize` | 0 | 0 uses the contract's tick |
+| `rows` | 1000 | Rows across each profile, as Cammy sets it in TradingView; never finer than a tick. 0 gives one row a tick |
+| `overnightStart` | 18:00 | Where the overnight developing profile starts: the Globex open, or 16:00 to include the post-close volume [VP 20, 26] |
+| `stackTicks` | 0 | How close levels must be to stack; 0 is the per-market default above. Your setting |
+| `showWeek`, `showPrevDay`, `showOvernight`, `showDeveloping` | on | Each profile's lines, labels and taps |
+| `showProfile`, `profileSide`, `profileWidthPx` | on, session start, 140 | The developing histogram, from the session's first bar or right of the latest bar |
+| `showFirstTaps`, `showStacks`, `showSessions`, `showLabels`, `showPanel` | on | Each layer |
+| `showVWAP`, `vwapBand` | off, 1 | VWAP and a band, at TradingView's defaults (session anchor, 1 standard deviation). The latest video adds it as a confluence and an exit [VP 1] |
+| `labelOffsetPx`, `labelFontSize` | 8, 11 | Label placement |
+
+### Notes
+
+- **How a profile is built.** Each 1-minute bar's volume is spread evenly across its high-low range, as a 1-minute profile is, with Tradovate's own volume at price on coarser bars when the chart has it. The POC is the row with the most volume, and the value area grows from it a row at a time toward the larger neighbour until it holds 70%. TradingView does not publish its arithmetic, so a level can sit a tick or a row from what Cammy's chart shows; NQ's weekly profile has rows of about a point at 1000 rows.
+- **Verified outside Tradovate.** A second implementation of the same definitions, built on the backtester's own session fields instead of this clock, agreed on every level the indicator drew. That was 851,409 readings on MNQ 1-minute bars from January to July 2026, at both overnight starts and both row settings. It also agreed on every first tap (1,314). Three planted mistakes (a 69% value area, a 15:59 close, the opposite tie rule) were each caught. A bar read while still forming changes nothing once it closes, and the VWAP matches a separate calculation. The checks ran on the backtester's mock (`npm run mock -- cammyValueLevels`).
+- **Not verified inside Tradovate.** The panel's pixel position (below the platform's legend line), the histogram widths and the label alignment are written from Tradovate's API docs. If the panel sits badly, turn off `showPanel`; the lines and labels still draw.
+- **It is not a backtest.** Nothing here says the strategy has an edge.
