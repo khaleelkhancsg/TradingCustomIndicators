@@ -409,3 +409,55 @@ Left to you, because Cammy judges them by eye:
 - **Verified outside Tradovate.** A second implementation of the same definitions, built on the backtester's own session fields instead of this clock, agreed on every level the indicator drew. That was 851,409 readings on MNQ 1-minute bars from January to July 2026, at both overnight starts and both row settings. It also agreed on every first tap (1,314). Three planted mistakes (a 69% value area, a 15:59 close, the opposite tie rule) were each caught. A bar read while still forming changes nothing once it closes, and the VWAP matches a separate calculation. The checks ran on the backtester's mock (`npm run mock -- cammyValueLevels`).
 - **Not verified inside Tradovate.** The panel's pixel position (below the platform's legend line), the histogram widths and the label alignment are written from Tradovate's API docs. If the panel sits badly, turn off `showPanel`; the lines and labels still draw.
 - **Backtested separately, with no edge found.** My separate backtesting project trades these same levels as its `cammy_value_levels` strategy (none of 2.1 million readings differs), with each of Cammy's calls as a setting. On MNQ in 2026, and forward from July 15 to October 30, it did no better than on placebo markets: random paths where no level can mean anything. Its 60% win rate came from how a backtest reads the bar a limit order fills on. At Cammy's risk it passed no 30-day evaluation; sized up five times it passed about as many as the placebo markets did. None of this changes what the indicator draws.
+
+## `emaMacdDatabox.js` — EMA + MACD databox
+
+A box in the chart's top-left corner with one row for the EMA cross and one for the MACD. Each row says which side its lines are on, read at bar close, and warns when its histogram shrinks. It works on any chart: any timeframe, any bar type. It draws nothing else unless you switch the EMA lines on.
+
+### Install
+
+1. In Tradovate, open the custom indicator code editor and create a new indicator.
+2. Paste the **entire** contents of `emaMacdDatabox.js` and save.
+3. Add it to any chart from the indicator list (tagged **Trend**). Add it to each chart you want read.
+
+### Chart setup
+
+- **Any timeframe and bar type:** minutes, hours, days, ticks, range or Renko. It reads the bars of the chart it is on.
+- **Load a few hundred bars.** A row reads `Warming up` until its slow EMA, or the MACD's signal line, has had its full length: 21 bars and 34 bars at the defaults.
+- **To check it against the lines,** add Tradovate's own MACD (12, 26, 9), or switch on `showEmas`. The rows read the same numbers those draw.
+
+### Reading it
+
+| Row reads | When |
+|---|---|
+| **Long** | EMA: the fast EMA is above the slow one. MACD: the MACD line is above its signal line |
+| **Short** | The same, below |
+| **Potentially short** | Long, but the histogram bar that just closed is smaller than the one before it. For the MACD that is Tradovate's histogram, the MACD line minus the signal line; for the EMA, the gap between the two EMAs |
+| **Potentially long** | Short, but the histogram bar that just closed is smaller than the one before it: nearer zero |
+| **Warming up** | Not enough bars yet |
+
+- **The count** (`12 bars`) is how many closed bars the row has been on its side, the cross bar included. A warning does not reset it, since the lines have not crossed.
+- **A cross needs the lines to swap sides.** Lines exactly equal keep the side they had, and a histogram bar the same size as the one before is not a warning.
+- **At bar close.** The box reads the bar that last finished, so it changes once a bar and never flickers while a bar forms. Its top line says `at bar close`, or `live bar` with `readFormingBar` on.
+
+### Settings
+
+| Setting | Default | |
+|---|---|---|
+| `emaFast`, `emaSlow` | 9, 21 | The EMA row's two lengths. Set `emaFast` to 1 to read price against one EMA |
+| `macdFast`, `macdSlow`, `macdSignal` | 12, 26, 9 | The MACD row, as Tradovate's MACD |
+| `emaWarning`, `macdWarning` | on | Each row's warning from its histogram |
+| `readFormingBar` | off | Read the forming bar instead of the last finished one. It can change within a bar |
+| `showBars` | on | The count column |
+| `showEmas` | off | Draw the two EMAs the EMA row reads |
+| `fontSize`, `boxX`, `boxY` | 13, 8, 30 | Text size, and the box's position in pixels from the chart's top-left corner. Move it if it covers another panel there (`cammyValueLevels` draws one) |
+
+### Notes
+
+- **The same arithmetic as Tradovate's own EMA and MACD.** Each EMA is the average of its first n bars, then moves 2 / (n + 1) of the way to each new close, as Tradovate's EMA tool does. The MACD's signal line starts on bar slow - 1, as its MACD does. It was checked on the backtester's mock of Tradovate's runtime, against Tradovate's own EMA and MACD code:
+  - the EMA lines matched to the last digit on every bar;
+  - each row's side, warning and count matched what the built-in MACD's histogram says, at 127 points across 6,000 bars;
+  - a bar mapped again while it forms changes nothing once it closes.
+- **On a chart whose last bar has finished** (the market closed), the box reads the bar before it. Switch on `readFormingBar` to read that last bar.
+- **Not verified inside Tradovate.** The box's pixel position and column widths come from Tradovate's API docs, and fonts differ a little by platform.
+- **A reading, not a strategy.** None of these states has been tested as a signal here. My separate backtesting project found no edge in EMA or MACD sides taken alone: its regime study tested both, on 5-minute to weekly bars, against placebo markets.
