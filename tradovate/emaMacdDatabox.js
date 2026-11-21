@@ -13,13 +13,18 @@
  * At the defaults the two rows share their EMAs: the MACD line is the 12 EMA minus the 26,
  * so the EMA row reads the MACD line against zero, and the MACD row it against its signal.
  *
- * AND ITS HISTOGRAM, the bar that just closed against the one before it:
- *   MACD   the MACD line minus the signal line: the histogram Tradovate's MACD plots.
- *   EMA    the fast EMA minus the slow one: the gap that closes before they cross.
- * On the long side, a histogram bar smaller than the one before it reads Potentially
- * short. On the short side, a bar smaller than the one before it (nearer zero) reads
- * Potentially long. A bar the same size or larger leaves the row on its side. Each
- * row's warning can be switched off.
+ * AND WHETHER IT IS TURNING, on the bar that just closed against the bars before it.
+ *   MACD   The histogram (the MACD line minus the signal line, as Tradovate's MACD plots
+ *          it) is smaller than the bar before: nearer zero.
+ *   EMA    The gap between the EMAs closed by more on this bar than on the bar before:
+ *          the lines are heading for a cross, and faster.
+ *          A gap still closing, but more slowly, is not a warning. That is what a fading
+ *          bounce in a drop, or a fading pullback in a rise, looks like: the lagging EMAs
+ *          drift together for a while after the move has run out, which the MACD's
+ *          histogram already shows. "Closing at all" warns on any closing gap instead,
+ *          as the first version did.
+ * On the long side a warning reads Potentially short; on the short side, Potentially
+ * long. Each row's warning can be switched off.
  *
  * The count is how many closed bars the row has been on its side, the cross bar
  * included. A warning does not reset it: the lines have not crossed.
@@ -61,17 +66,27 @@ function emaStep(prev, x, n) {
     return { count: prev.count + 1, total: prev.total, v: prev.v + (2 / (n + 1)) * (x - prev.v) };
 }
 
-// One row on a bar, from the same row on the bar before. `diff` is its histogram.
-function rowStep(prev, diff, warnOn) {
+// One row on a bar, from the same row on the bar before. `diff` is its histogram, and
+// `rule` when it warns:
+//   "shrink"  the bar is smaller than the one before (nearer zero): the MACD row's
+//   "speed"   the bar moved toward zero, and by more than the bar before moved: the EMA row's
+//   "off"
+function rowStep(prev, diff, rule) {
     const side = diff > 0 ? 1 : diff < 0 ? -1 : prev ? prev.side : 0;
     const bars = prev && side === prev.side ? prev.bars + 1 : 1;
+    const move = prev ? diff - prev.diff : NaN;
     let warn = 0;
-    if (warnOn && prev && side !== 0) {
-        if (side === 1 && diff < prev.diff) warn = -1;           // long, the bar smaller than the last
-        else if (side === -1 && diff > prev.diff) warn = 1;      // short, the bar nearer zero
+    if (prev && side !== 0) {
+        if (rule === "shrink") warn = side === 1 ? (diff < prev.diff ? -1 : 0) : diff > prev.diff ? 1 : 0;
+        else if (rule === "speed" && Number.isFinite(prev.move)) {
+            warn = side === 1 ? (move < 0 && move < prev.move ? -1 : 0) : move > 0 && move > prev.move ? 1 : 0;
+        }
     }
-    return { side, bars, warn, diff };
+    return { side, bars, warn, diff, move };
 }
+// The settings as rules; a setting saved as on / off by the first version still reads.
+const emaRule = (v) => (v === false || v === "off" ? "off" : v === "closer" ? "shrink" : "speed");
+const macdRule = (v) => (v === false || v === "off" ? "off" : "shrink");
 
 function stateText(r, ready) {
     if (!ready || r.side === 0) return ["Warming up", COLORS.dim];
@@ -101,8 +116,8 @@ class EmaMacdDatabox {
 
         const S = {
             ef, es, mf, ms, sg,
-            ema: rowStep(prev && prev.ema, ef.v - es.v, p.emaWarning),
-            macd: sg ? rowStep(prev && prev.macd, line - sg.v, p.macdWarning) : null,
+            ema: rowStep(prev && prev.ema, ef.v - es.v, emaRule(p.emaWarning)),
+            macd: sg ? rowStep(prev && prev.macd, line - sg.v, macdRule(p.macdWarning)) : null,
             emaReady: idx >= p.emaSlow,
             macdReady: !!sg && sg.count >= p.macdSignal
         };
@@ -181,7 +196,7 @@ module.exports = {
         macdFast: predef.paramSpecs.period(12),
         macdSlow: predef.paramSpecs.period(26),
         macdSignal: predef.paramSpecs.period(9),
-        emaWarning: predef.paramSpecs.bool(true),
+        emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
         readFormingBar: predef.paramSpecs.bool(false),
         showBars: predef.paramSpecs.bool(true),
