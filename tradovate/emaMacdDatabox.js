@@ -3,13 +3,15 @@
  *
  * A box in the chart's corner, one row for the EMA cross and one for the MACD:
  *
- *     EMA 9/21        Long                12 bars
+ *     EMA 12/26       Long                12 bars
  *     MACD 12/26/9    Potentially short    3 bars
  *
  * EACH ROW is the side of its latest cross, read at bar close:
  *   EMA    Long while the fast EMA is above the slow one, Short while it is below.
  *   MACD   Long while the MACD line is above its signal line, Short while it is below.
  * A difference of exactly zero is not a cross: the row keeps its side.
+ * At the defaults the two rows share their EMAs: the MACD line is the 12 EMA minus the 26,
+ * so the EMA row reads the MACD line against zero, and the MACD row it against its signal.
  *
  * AND ITS HISTOGRAM, the bar that just closed against the one before it:
  *   MACD   the MACD line minus the signal line: the histogram Tradovate's MACD plots.
@@ -174,8 +176,8 @@ module.exports = {
     description: "EMA + MACD databox: each row's side, and when its histogram shrinks",
     calculator: EmaMacdDatabox,
     params: {
-        emaFast: predef.paramSpecs.period(9),
-        emaSlow: predef.paramSpecs.period(21),
+        emaFast: predef.paramSpecs.period(12),
+        emaSlow: predef.paramSpecs.period(26),
         macdFast: predef.paramSpecs.period(12),
         macdSlow: predef.paramSpecs.period(26),
         macdSignal: predef.paramSpecs.period(9),

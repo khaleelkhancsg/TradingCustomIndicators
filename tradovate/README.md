@@ -423,7 +423,7 @@ A box in the chart's top-left corner with one row for the EMA cross and one for 
 ### Chart setup
 
 - **Any timeframe and bar type:** minutes, hours, days, ticks, range or Renko. It reads the bars of the chart it is on.
-- **Load a few hundred bars.** A row reads `Warming up` until its slow EMA, or the MACD's signal line, has had its full length: 21 bars and 34 bars at the defaults.
+- **Load a few hundred bars.** A row reads `Warming up` until its slow EMA, or the MACD's signal line, has had its full length: 26 bars and 34 bars at the defaults.
 - **To check it against the lines,** add Tradovate's own MACD (12, 26, 9), or switch on `showEmas`. The rows read the same numbers those draw.
 
 ### Reading it
@@ -444,7 +444,7 @@ A box in the chart's top-left corner with one row for the EMA cross and one for 
 
 | Setting | Default | |
 |---|---|---|
-| `emaFast`, `emaSlow` | 9, 21 | The EMA row's two lengths. Set `emaFast` to 1 to read price against one EMA |
+| `emaFast`, `emaSlow` | 12, 26 | The EMA row's two lengths. At 12 and 26 it reads Tradovate's MACD line against zero, since that line is the 12 EMA minus the 26. Set `emaFast` to 1 to read price against one EMA |
 | `macdFast`, `macdSlow`, `macdSignal` | 12, 26, 9 | The MACD row, as Tradovate's MACD |
 | `emaWarning`, `macdWarning` | on | Each row's warning from its histogram |
 | `readFormingBar` | off | Read the forming bar instead of the last finished one. It can change within a bar |
