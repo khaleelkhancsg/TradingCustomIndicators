@@ -439,8 +439,15 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 - **The count** (`12 bars`) is how many bars the row has been on its side, the cross bar included, and the forming bar too when it updates live. A warning does not reset it, since the lines have not crossed.
 - **A cross needs the lines to swap sides.** Lines exactly equal keep the side they had, and a histogram bar the same size as the one before is not a warning.
 - **Why the EMA row asks for a gap closing faster.** EMAs lag, so after a bounce in a drop (or a pullback in a rise) their gap keeps closing for several bars after the move has run out. By then the MACD's histogram is already shrinking. Counting every closing gap made the EMA row say "Potentially long" right as the MACD row said "Potentially short", about the same bounce. Asking for a gap closing faster than the bar before leaves a fading move on its plain side. On MNQ in 2026 the two rows warned opposite ways on 1.7% of 1-minute bars instead of 6.8%, and on 2.3% of 5-minute bars instead of 8.1%. `emaWarning` = `closer` brings the first rule back.
+- **Momentum slowing** (`emaWarning` = `slowing`) warns as soon as the gap moves its side's way by less than it did on the bar before, while the EMAs are still spreading. It is the earliest of the three, and mostly a false alarm. Tested on MNQ, 2019-2026, against 100 random markets:
+  - It fires before the turn 64% of the time on 1-minute bars, but random markets give the same 64%. The rule can only warn "Potentially long" while the EMAs are bearish, which is mostly during a fall.
+  - When it fires before the turn, price still goes about 31 points the other way first, as on random markets.
+  - 92% of its warnings clear back to plain Long or Short without the lines crossing, within about 2 minutes on 1-minute bars.
+  - Taken as a reversal entry, it did worse than random entries in 2019-2025 and no better in 2026.
 - **Live, by default.** The box reads the forming bar, so it moves with each tick as Tradovate's EMA and MACD lines do, on any timeframe. A row can change and change back while a bar forms. Once the bar closes, it reads what the at-close box reads for that bar. Its top line says `live`.
-- **At bar close** (`updates`) reads the bar that last finished instead, so the box changes once a bar and never flickers. Its top line says `at bar close`. My backtests read the box this way: a live row that flips mid-bar and flips back by the close was never tested.
+- **At bar close** (`updates`) reads the bar that last finished instead, so the box changes once a bar and never flickers. Its top line says `at bar close`.
+  - My backtests read the box both ways. Read live, 60% of flips undo themselves before their minute closes.
+  - Taking signals the moment the box flips did no better than waiting for the close, against random markets.
 - **It can't be dragged.** Tradovate gives indicators no mouse input.
   - Its own Data Box is part of the platform, not something an indicator can make. It shows the bar under the cursor.
   - Only drawing tools can be dragged, and a drawing tool can't read the chart's bars to work out an EMA.
@@ -453,7 +460,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 |---|---|---|
 | `emaFast`, `emaSlow` | 12, 26 | The EMA row's two lengths. At 12 and 26 it reads Tradovate's MACD line against zero, since that line is the 12 EMA minus the 26. Set `emaFast` to 1 to read price against one EMA |
 | `macdFast`, `macdSlow`, `macdSignal` | 12, 26, 9 | The MACD row, as Tradovate's MACD |
-| `emaWarning` | gap closing faster | When the EMA row warns: the gap closing faster than the bar before (`speed`), closing at all (`closer`, the first version's), or `off` |
+| `emaWarning` | gap closing faster | When the EMA row warns: the gap closing faster than the bar before (`speed`), closing at all (`closer`, the first version's), moving less than the bar before (`slowing`, momentum fading), or `off` |
 | `macdWarning` | on | The MACD row's warning: its histogram bar smaller than the one before |
 | `updates` | live | `live` reads the forming bar with every tick; `close` reads the last finished bar, once a bar. It replaced `readFormingBar` (off) on 2026-11-23, and a chart that saved that setting now reads live |
 | `showBars` | on | The count column |

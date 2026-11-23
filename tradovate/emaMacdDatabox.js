@@ -22,7 +22,9 @@
  *          bounce in a drop, or a fading pullback in a rise, looks like: the lagging EMAs
  *          drift together for a while after the move has run out, which the MACD's
  *          histogram already shows. "Closing at all" warns on any closing gap instead,
- *          as the first version did.
+ *          as the first version did. "Momentum slowing" warns earlier still: as soon as
+ *          the gap moves its side's way by less than it did on the bar before, whether
+ *          still widening or already closing.
  * On the long side a warning reads Potentially short; on the short side, Potentially
  * long. Each row's warning can be switched off.
  *
@@ -90,6 +92,8 @@ function emaStep(prev, x, n) {
 // `rule` when it warns:
 //   "shrink"  the bar is smaller than the one before (nearer zero): the MACD row's
 //   "speed"   the bar moved toward zero, and by more than the bar before moved: the EMA row's
+//   "slowing" the bar moved less its side's way than the bar before did, widening more slowly
+//             or closing: momentum fading, the EMA row's other choice
 //   "off"
 function rowStep(prev, diff, rule) {
     const side = diff > 0 ? 1 : diff < 0 ? -1 : prev ? prev.side : 0;
@@ -100,12 +104,14 @@ function rowStep(prev, diff, rule) {
         if (rule === "shrink") warn = side === 1 ? (diff < prev.diff ? -1 : 0) : diff > prev.diff ? 1 : 0;
         else if (rule === "speed" && Number.isFinite(prev.move)) {
             warn = side === 1 ? (move < 0 && move < prev.move ? -1 : 0) : move > 0 && move > prev.move ? 1 : 0;
+        } else if (rule === "slowing" && Number.isFinite(prev.move)) {
+            warn = side === 1 ? (move < prev.move ? -1 : 0) : move > prev.move ? 1 : 0;
         }
     }
     return { side, bars, warn, diff, move };
 }
 // The settings as rules; a setting saved as on / off by the first version still reads.
-const emaRule = (v) => (v === false || v === "off" ? "off" : v === "closer" ? "shrink" : "speed");
+const emaRule = (v) => (v === false || v === "off" ? "off" : v === "closer" ? "shrink" : v === "slowing" ? "slowing" : "speed");
 const macdRule = (v) => (v === false || v === "off" ? "off" : "shrink");
 
 function stateText(r, ready) {
@@ -224,7 +230,7 @@ module.exports = {
         macdFast: predef.paramSpecs.period(12),
         macdSlow: predef.paramSpecs.period(26),
         macdSignal: predef.paramSpecs.period(9),
-        emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", off: "Off" }, "speed"),
+        emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", slowing: "Momentum slowing: gap moving less than the bar before", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
         updates: predef.paramSpecs.enum({ live: "Live: the forming bar, every tick", close: "At bar close" }, "live"),
         showBars: predef.paramSpecs.bool(true),
