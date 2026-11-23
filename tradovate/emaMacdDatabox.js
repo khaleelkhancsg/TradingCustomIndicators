@@ -37,9 +37,10 @@
  * flicker. Until 2026-11-23 this was "Read forming bar", off by default; a saved value of
  * that setting is no longer read.
  *
- * WHERE IT SITS. In a corner of the chart ("Corner"), "Box X" and "Box Y" pixels in from
- * it. Tradovate gives an indicator no mouse input, so the box cannot be dragged: move it
- * with these settings.
+ * WHERE IT SITS. In a corner of the chart ("Corner", top right by default), "Box X" and
+ * "Box Y" pixels in from it. Tradovate gives an indicator no mouse input, so the box cannot
+ * be dragged: move it with these settings. Its text is centred in each column, which reads
+ * the same whichever way the platform runs left- or right-aligned text (undocumented).
  *
  * ANY TIMEFRAME. It reads the chart's own bars, whatever they are: minutes, hours,
  * days, ticks, range or Renko. Put it on each chart you want read.
@@ -167,12 +168,15 @@ class EmaMacdDatabox {
         const labelW = Math.max(...rows.map((r) => r.label.length)) * em;
         const stateW = "Potentially short".length * em;
         const ageW = p.showBars ? "999 bars".length * em : 0;
-        const xLabel = 8, xState = xLabel + labelW + 14, xAge = xState + stateW + 14;
+        // Each line of text is centred in its column. Tradovate's docs do not say which way
+        // "leftMiddle" text runs from its point, and read the other way, left-aligned text runs
+        // out of the box's left side; centred text means the same either way.
+        const xLabel = 8 + labelW / 2, xState = 8 + labelW + 14 + stateW / 2, xAge = 8 + labelW + 14 + stateW + 14 + ageW / 2;
         const width = 8 + labelW + 14 + stateW + (p.showBars ? 14 + ageW : 0) + 8;
         const height = (rows.length + 1) * step + 6;
 
         // a point x pixels from the box's left edge and y from its top
-        const c = CORNERS[p.corner] || CORNERS.topLeft;
+        const c = CORNERS[p.corner] || CORNERS.topRight;
         const X = (x) => px(c.right ? x - p.boxX - width : p.boxX + x);
         const Y = (y) => px(c.bottom ? y - p.boxY - height : p.boxY + y);
         const at = c.origin ? { origin: c.origin } : {};
@@ -189,8 +193,8 @@ class EmaMacdDatabox {
             lineStyle: { lineWidth: 1, color: COLORS.edge }
         }, {
             tag: "Text", key: "dbHead", global: true, ...at,
-            point: { x: X(xLabel), y: Y(3 + step / 2) },
-            text: `EMA + MACD, ${live ? "live" : "at bar close"}`, style: { fontSize: fs - 2, fill: COLORS.dim }, textAlignment: "leftMiddle"
+            point: { x: X(width / 2), y: Y(3 + step / 2) },
+            text: `EMA + MACD, ${live ? "live" : "at bar close"}`, style: { fontSize: fs - 2, fill: COLORS.dim }, textAlignment: "centerMiddle"
         }];
         rows.forEach((row, k) => {
             const y = Y(3 + (k + 1.5) * step);
@@ -198,12 +202,12 @@ class EmaMacdDatabox {
             const n = row.ready && row.r.side !== 0 ? row.r.bars : 0;
             items.push(
                 { tag: "Text", key: "dbLabel" + k, global: true, ...at, point: { x: X(xLabel), y },
-                  text: row.label, style: { fontSize: fs, fill: COLORS.label }, textAlignment: "leftMiddle" },
+                  text: row.label, style: { fontSize: fs, fill: COLORS.label }, textAlignment: "centerMiddle" },
                 { tag: "Text", key: "dbState" + k, global: true, ...at, point: { x: X(xState), y },
-                  text, style: { fontSize: fs, fontWeight: "bold", fill }, textAlignment: "leftMiddle" },
+                  text, style: { fontSize: fs, fontWeight: "bold", fill }, textAlignment: "centerMiddle" },
                 { tag: "Text", key: "dbBars" + k, global: true, ...at, point: { x: X(xAge), y },
                   text: p.showBars && n ? `${n} bar${n === 1 ? "" : "s"}` : "",
-                  style: { fontSize: fs - 1, fill: COLORS.dim }, textAlignment: "leftMiddle" }
+                  style: { fontSize: fs - 1, fill: COLORS.dim }, textAlignment: "centerMiddle" }
             );
         });
         return items;
@@ -226,7 +230,7 @@ module.exports = {
         showBars: predef.paramSpecs.bool(true),
         showEmas: predef.paramSpecs.bool(false),
         fontSize: predef.paramSpecs.number(13, 1, 8),
-        corner: predef.paramSpecs.enum({ topLeft: "Top left", topRight: "Top right", bottomLeft: "Bottom left", bottomRight: "Bottom right" }, "topLeft"),
+        corner: predef.paramSpecs.enum({ topRight: "Top right", topLeft: "Top left", bottomRight: "Bottom right", bottomLeft: "Bottom left" }, "topRight"),
         boxX: predef.paramSpecs.number(8, 1, 0),
         boxY: predef.paramSpecs.number(30, 1, 0)
     },

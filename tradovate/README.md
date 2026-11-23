@@ -441,7 +441,11 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 - **Why the EMA row asks for a gap closing faster.** EMAs lag, so after a bounce in a drop (or a pullback in a rise) their gap keeps closing for several bars after the move has run out. By then the MACD's histogram is already shrinking. Counting every closing gap made the EMA row say "Potentially long" right as the MACD row said "Potentially short", about the same bounce. Asking for a gap closing faster than the bar before leaves a fading move on its plain side. On MNQ in 2026 the two rows warned opposite ways on 1.7% of 1-minute bars instead of 6.8%, and on 2.3% of 5-minute bars instead of 8.1%. `emaWarning` = `closer` brings the first rule back.
 - **Live, by default.** The box reads the forming bar, so it moves with each tick as Tradovate's EMA and MACD lines do, on any timeframe. A row can change and change back while a bar forms. Once the bar closes, it reads what the at-close box reads for that bar. Its top line says `live`.
 - **At bar close** (`updates`) reads the bar that last finished instead, so the box changes once a bar and never flickers. Its top line says `at bar close`. My backtests read the box this way: a live row that flips mid-bar and flips back by the close was never tested.
-- **It can't be dragged.** Tradovate gives indicators no mouse input. Only drawing tools can be dragged, and a drawing tool can't read the chart's bars to work out an EMA. Pick the box's `corner` instead, and nudge it with `boxX` and `boxY`.
+- **It can't be dragged.** Tradovate gives indicators no mouse input.
+  - Its own Data Box is part of the platform, not something an indicator can make. It shows the bar under the cursor.
+  - Only drawing tools can be dragged, and a drawing tool can't read the chart's bars to work out an EMA.
+  - So the box sits in a `corner` (top right by default), and `boxX` and `boxY` nudge it.
+- **Its text is centred in each column.** Tradovate's docs don't say which way left-aligned text runs from its point. Read the other way, left-aligned text runs out of the box's left side, and off the chart when the box sits at the left. Centred text reads the same either way.
 
 ### Settings
 
@@ -455,7 +459,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 | `showBars` | on | The count column |
 | `showEmas` | off | Draw the two EMAs the EMA row reads |
 | `fontSize` | 13 | Text size |
-| `corner` | top left | The corner the box sits in: top left, top right, bottom left or bottom right. Move it if it covers another panel (`cammyValueLevels` draws one top left) |
+| `corner` | top right | The corner the box sits in: top right, top left, bottom right or bottom left. Move it if it covers another panel (`cammyValueLevels` draws one top left) |
 | `boxX`, `boxY` | 8, 30 | How far in from that corner, in pixels: across from its side, and down from the top (or up from the bottom) |
 
 ### Notes
@@ -468,7 +472,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 - **On a chart whose last bar has finished** (the market closed), the live box reads that last bar, and the at-close box the bar before it.
 - **Not verified inside Tradovate.** The box's pixel position and column widths come from Tradovate's API docs, and fonts differ a little by platform.
   - The right-hand and bottom corners follow Tradovate's guide, *Creating Advanced Custom Indicators*. With the zero moved to the right edge, numbers into the chart are negative. The guide says this for the right edge; the bottom edge is read the same way.
-  - If a right or bottom box doesn't show, or shows off the chart, go back to `top left` and tell me.
+  - If the box doesn't show at the top right, or shows off the chart, set `corner` to `top left` and tell me.
 - **A reading, not a strategy.** My separate backtesting project tested the box on MNQ's 1- and 5-minute bars in 2026, against random markets: its sides, its warnings, and every combination of its states. Taken together they called the next 1-30 minutes no better than random markets did.
   - One reading stood out, and it points the opposite way to its name: the 5-minute EMA row's "Potentially long", a bounce gathering pace while the EMAs are still bearish.
   - Over the next 15 minutes price fell 2.65 points on average, against +1.83 after plain "Short", across 1,569 occurrences.
