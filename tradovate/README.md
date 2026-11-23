@@ -412,7 +412,7 @@ Left to you, because Cammy judges them by eye:
 
 ## `emaMacdDatabox.js` — EMA + MACD databox
 
-A box in the chart's top-left corner with one row for the EMA cross and one for the MACD. Each row says which side its lines are on, read at bar close, and warns when the row looks to be turning. It works on any chart: any timeframe, any bar type. It draws nothing else unless you switch the EMA lines on.
+A box in a corner of the chart with one row for the EMA cross and one for the MACD. Each row says which side its lines are on and warns when the row looks to be turning. It updates live with each tick, as the lines do, or once a bar at bar close if you prefer. It works on any chart: any timeframe, any bar type. It draws nothing else unless you switch the EMA lines on.
 
 ### Install
 
@@ -432,14 +432,16 @@ A box in the chart's top-left corner with one row for the EMA cross and one for 
 |---|---|
 | **Long** | EMA: the fast EMA is above the slow one. MACD: the MACD line is above its signal line |
 | **Short** | The same, below |
-| **Potentially short** | Long, but turning. MACD: the histogram bar that just closed (the MACD line minus the signal line) is smaller than the one before it. EMA: the gap between the EMAs closed by more on that bar than on the bar before |
+| **Potentially short** | Long, but turning. MACD: the histogram bar it reads (the MACD line minus the signal line; live, the forming bar) is smaller than the one before it. EMA: the gap between the EMAs closed by more on that bar than on the bar before |
 | **Potentially long** | Short, but turning, the same two ways: the MACD bar nearer zero than the one before, or the EMA gap closing faster than it did |
 | **Warming up** | Not enough bars yet |
 
-- **The count** (`12 bars`) is how many closed bars the row has been on its side, the cross bar included. A warning does not reset it, since the lines have not crossed.
+- **The count** (`12 bars`) is how many bars the row has been on its side, the cross bar included, and the forming bar too when it updates live. A warning does not reset it, since the lines have not crossed.
 - **A cross needs the lines to swap sides.** Lines exactly equal keep the side they had, and a histogram bar the same size as the one before is not a warning.
 - **Why the EMA row asks for a gap closing faster.** EMAs lag, so after a bounce in a drop (or a pullback in a rise) their gap keeps closing for several bars after the move has run out. By then the MACD's histogram is already shrinking. Counting every closing gap made the EMA row say "Potentially long" right as the MACD row said "Potentially short", about the same bounce. Asking for a gap closing faster than the bar before leaves a fading move on its plain side. On MNQ in 2026 the two rows warned opposite ways on 1.7% of 1-minute bars instead of 6.8%, and on 2.3% of 5-minute bars instead of 8.1%. `emaWarning` = `closer` brings the first rule back.
-- **At bar close.** The box reads the bar that last finished, so it changes once a bar and never flickers while a bar forms. Its top line says `at bar close`, or `live bar` with `readFormingBar` on.
+- **Live, by default.** The box reads the forming bar, so it moves with each tick as Tradovate's EMA and MACD lines do, on any timeframe. A row can change and change back while a bar forms. Once the bar closes, it reads what the at-close box reads for that bar. Its top line says `live`.
+- **At bar close** (`updates`) reads the bar that last finished instead, so the box changes once a bar and never flickers. Its top line says `at bar close`. My backtests read the box this way: a live row that flips mid-bar and flips back by the close was never tested.
+- **It can't be dragged.** Tradovate gives indicators no mouse input. Only drawing tools can be dragged, and a drawing tool can't read the chart's bars to work out an EMA. Pick the box's `corner` instead, and nudge it with `boxX` and `boxY`.
 
 ### Settings
 
@@ -449,19 +451,24 @@ A box in the chart's top-left corner with one row for the EMA cross and one for 
 | `macdFast`, `macdSlow`, `macdSignal` | 12, 26, 9 | The MACD row, as Tradovate's MACD |
 | `emaWarning` | gap closing faster | When the EMA row warns: the gap closing faster than the bar before (`speed`), closing at all (`closer`, the first version's), or `off` |
 | `macdWarning` | on | The MACD row's warning: its histogram bar smaller than the one before |
-| `readFormingBar` | off | Read the forming bar instead of the last finished one. It can change within a bar |
+| `updates` | live | `live` reads the forming bar with every tick; `close` reads the last finished bar, once a bar. It replaced `readFormingBar` (off) on 2026-11-23, and a chart that saved that setting now reads live |
 | `showBars` | on | The count column |
 | `showEmas` | off | Draw the two EMAs the EMA row reads |
-| `fontSize`, `boxX`, `boxY` | 13, 8, 30 | Text size, and the box's position in pixels from the chart's top-left corner. Move it if it covers another panel there (`cammyValueLevels` draws one) |
+| `fontSize` | 13 | Text size |
+| `corner` | top left | The corner the box sits in: top left, top right, bottom left or bottom right. Move it if it covers another panel (`cammyValueLevels` draws one top left) |
+| `boxX`, `boxY` | 8, 30 | How far in from that corner, in pixels: across from its side, and down from the top (or up from the bottom) |
 
 ### Notes
 
 - **The same arithmetic as Tradovate's own EMA and MACD.** Each EMA is the average of its first n bars, then moves 2 / (n + 1) of the way to each new close, as Tradovate's EMA tool does. The MACD's signal line starts on bar slow - 1, as its MACD does. It was checked on the backtester's mock of Tradovate's runtime, against Tradovate's own EMA and MACD code:
   - the EMA lines matched to the last digit on every bar;
   - each row's side, warning and count matched what the built-in MACD's histogram says, at 127 points across 6,000 bars;
-  - a bar mapped again while it forms changes nothing once it closes.
-- **On a chart whose last bar has finished** (the market closed), the box reads the bar before it. Switch on `readFormingBar` to read that last bar.
+  - a bar mapped again while it forms changes nothing once it closes;
+  - live, a bar read tick by tick ends where the at-close box reads it.
+- **On a chart whose last bar has finished** (the market closed), the live box reads that last bar, and the at-close box the bar before it.
 - **Not verified inside Tradovate.** The box's pixel position and column widths come from Tradovate's API docs, and fonts differ a little by platform.
+  - The right-hand and bottom corners follow Tradovate's guide, *Creating Advanced Custom Indicators*. With the zero moved to the right edge, numbers into the chart are negative. The guide says this for the right edge; the bottom edge is read the same way.
+  - If a right or bottom box doesn't show, or shows off the chart, go back to `top left` and tell me.
 - **A reading, not a strategy.** My separate backtesting project tested the box on MNQ's 1- and 5-minute bars in 2026, against random markets: its sides, its warnings, and every combination of its states. Taken together they called the next 1-30 minutes no better than random markets did.
   - One reading stood out, and it points the opposite way to its name: the 5-minute EMA row's "Potentially long", a bounce gathering pace while the EMAs are still bearish.
   - Over the next 15 minutes price fell 2.65 points on average, against +1.83 after plain "Short", across 1,569 occurrences.

@@ -1,19 +1,19 @@
 /*
  * EMA + MACD databox  (Tradovate custom indicator)              ANY TIMEFRAME, ANY BARS.
  *
- * A box in the chart's corner, one row for the EMA cross and one for the MACD:
+ * A box in a corner of the chart, one row for the EMA cross and one for the MACD:
  *
  *     EMA 12/26       Long                12 bars
  *     MACD 12/26/9    Potentially short    3 bars
  *
- * EACH ROW is the side of its latest cross, read at bar close:
+ * EACH ROW is the side of its latest cross:
  *   EMA    Long while the fast EMA is above the slow one, Short while it is below.
  *   MACD   Long while the MACD line is above its signal line, Short while it is below.
  * A difference of exactly zero is not a cross: the row keeps its side.
  * At the defaults the two rows share their EMAs: the MACD line is the 12 EMA minus the 26,
  * so the EMA row reads the MACD line against zero, and the MACD row it against its signal.
  *
- * AND WHETHER IT IS TURNING, on the bar that just closed against the bars before it.
+ * AND WHETHER IT IS TURNING, on the bar it reads against the bars before it.
  *   MACD   The histogram (the MACD line minus the signal line, as Tradovate's MACD plots
  *          it) is smaller than the bar before: nearer zero.
  *   EMA    The gap between the EMAs closed by more on this bar than on the bar before:
@@ -26,13 +26,20 @@
  * On the long side a warning reads Potentially short; on the short side, Potentially
  * long. Each row's warning can be switched off.
  *
- * The count is how many closed bars the row has been on its side, the cross bar
- * included. A warning does not reset it: the lines have not crossed.
+ * The count is how many bars the row has been on its side, the cross bar included, and
+ * the forming bar too while the box reads it. A warning does not reset it: the lines have
+ * not crossed.
  *
- * AT BAR CLOSE. The box reads the last finished bar, so it changes once a bar and
- * never flickers while a bar forms. "Read the forming bar" reads the live bar instead.
- * On a chart whose last bar has finished (the market closed), that switch shows that
- * bar; off, the box reads the one before it.
+ * LIVE, BY DEFAULT. The box reads the forming bar, so it moves with each tick, as
+ * Tradovate's EMA and MACD lines do. A row can change and change back while a bar forms.
+ * Once the bar closes, the row reads what it would have read at bar close.
+ * "Updates: At bar close" reads the last finished bar instead: one change a bar, and no
+ * flicker. Until 2026-11-23 this was "Read forming bar", off by default; a saved value of
+ * that setting is no longer read.
+ *
+ * WHERE IT SITS. In a corner of the chart ("Corner"), "Box X" and "Box Y" pixels in from
+ * it. Tradovate gives an indicator no mouse input, so the box cannot be dragged: move it
+ * with these settings.
  *
  * ANY TIMEFRAME. It reads the chart's own bars, whatever they are: minutes, hours,
  * days, ticks, range or Renko. Put it on each chart you want read.
@@ -54,6 +61,18 @@ const COLORS = {
     label: "#c3c2b7", dim: "#898781", box: "#0e1116", edge: "#3a404c"
 };
 const KEEP = 3;    // bars of state kept: the bar being mapped and the two before it
+
+// The corners the box can sit in. Tradovate's `origin` moves a graphic's zero to a corner
+// of the chart and keeps the axes' direction: x still grows to the right and y down. So
+// from a right-hand corner, a point inside the chart has a negative x ("we need to use
+// negative numbers to move into the visible quadrant", its Creating Advanced Custom
+// Indicators guide), and from a bottom corner a negative y.
+const CORNERS = {
+    topLeft: { right: false, bottom: false, origin: null },
+    topRight: { right: true, bottom: false, origin: { cs: "grid", h: "right", v: "top" } },
+    bottomLeft: { right: false, bottom: true, origin: { cs: "grid", h: "left", v: "bottom" } },
+    bottomRight: { right: true, bottom: true, origin: { cs: "grid", h: "right", v: "bottom" } }
+};
 
 // Tradovate's EMA as a step from the previous bar's state, so a bar mapped again as it
 // forms starts from the same place every time: the average of the first `n` values,
@@ -130,14 +149,15 @@ class EmaMacdDatabox {
             out.emaSlow = es.v;
         }
         if (d.isLast()) {
-            const read = p.readFormingBar || !prev ? S : prev;
-            out.graphics = { items: this.box(read) };
+            const live = p.updates !== "close";
+            out.graphics = { items: this.box(live || !prev ? S : prev, live) };
         }
         return out;
     }
 
     // The box: always the same keys, so the platform replaces it rather than stacking it.
-    box(S) {
+    // It is laid out from its own top-left corner, then placed from the chart's corner.
+    box(S, live) {
         const p = this.props, fs = Math.max(8, p.fontSize), step = fs + 7;
         const em = fs * 0.56;            // about one character's width
         const rows = [
@@ -147,37 +167,41 @@ class EmaMacdDatabox {
         const labelW = Math.max(...rows.map((r) => r.label.length)) * em;
         const stateW = "Potentially short".length * em;
         const ageW = p.showBars ? "999 bars".length * em : 0;
-        const x0 = p.boxX, y0 = p.boxY;
-        const xLabel = x0 + 8, xState = xLabel + labelW + 14, xAge = xState + stateW + 14;
+        const xLabel = 8, xState = xLabel + labelW + 14, xAge = xState + stateW + 14;
         const width = 8 + labelW + 14 + stateW + (p.showBars ? 14 + ageW : 0) + 8;
-        const head = p.readFormingBar ? "live bar" : "at bar close";
         const height = (rows.length + 1) * step + 6;
 
+        // a point x pixels from the box's left edge and y from its top
+        const c = CORNERS[p.corner] || CORNERS.topLeft;
+        const X = (x) => px(c.right ? x - p.boxX - width : p.boxX + x);
+        const Y = (y) => px(c.bottom ? y - p.boxY - height : p.boxY + y);
+        const at = c.origin ? { origin: c.origin } : {};
+
         const outline = () => [{ tag: "Polygon", points: [
-            { x: px(x0), y: px(y0) }, { x: px(x0 + width), y: px(y0) },
-            { x: px(x0 + width), y: px(y0 + height) }, { x: px(x0), y: px(y0 + height) }
+            { x: X(0), y: Y(0) }, { x: X(width), y: Y(0) },
+            { x: X(width), y: Y(height) }, { x: X(0), y: Y(height) }
         ] }];
         const items = [{
-            tag: "Shapes", key: "dbBox", global: true, primitives: outline(),
+            tag: "Shapes", key: "dbBox", global: true, ...at, primitives: outline(),
             fillStyle: { color: COLORS.box, opacity: 0.9 }
         }, {
-            tag: "ContourShapes", key: "dbEdge", global: true, primitives: outline(),
+            tag: "ContourShapes", key: "dbEdge", global: true, ...at, primitives: outline(),
             lineStyle: { lineWidth: 1, color: COLORS.edge }
         }, {
-            tag: "Text", key: "dbHead", global: true,
-            point: { x: px(xLabel), y: px(y0 + 3 + step / 2) },
-            text: `EMA + MACD, ${head}`, style: { fontSize: fs - 2, fill: COLORS.dim }, textAlignment: "leftMiddle"
+            tag: "Text", key: "dbHead", global: true, ...at,
+            point: { x: X(xLabel), y: Y(3 + step / 2) },
+            text: `EMA + MACD, ${live ? "live" : "at bar close"}`, style: { fontSize: fs - 2, fill: COLORS.dim }, textAlignment: "leftMiddle"
         }];
         rows.forEach((row, k) => {
-            const y = px(y0 + 3 + (k + 1.5) * step);
+            const y = Y(3 + (k + 1.5) * step);
             const [text, fill] = stateText(row.r, row.ready);
             const n = row.ready && row.r.side !== 0 ? row.r.bars : 0;
             items.push(
-                { tag: "Text", key: "dbLabel" + k, global: true, point: { x: px(xLabel), y },
+                { tag: "Text", key: "dbLabel" + k, global: true, ...at, point: { x: X(xLabel), y },
                   text: row.label, style: { fontSize: fs, fill: COLORS.label }, textAlignment: "leftMiddle" },
-                { tag: "Text", key: "dbState" + k, global: true, point: { x: px(xState), y },
+                { tag: "Text", key: "dbState" + k, global: true, ...at, point: { x: X(xState), y },
                   text, style: { fontSize: fs, fontWeight: "bold", fill }, textAlignment: "leftMiddle" },
-                { tag: "Text", key: "dbBars" + k, global: true, point: { x: px(xAge), y },
+                { tag: "Text", key: "dbBars" + k, global: true, ...at, point: { x: X(xAge), y },
                   text: p.showBars && n ? `${n} bar${n === 1 ? "" : "s"}` : "",
                   style: { fontSize: fs - 1, fill: COLORS.dim }, textAlignment: "leftMiddle" }
             );
@@ -198,10 +222,11 @@ module.exports = {
         macdSignal: predef.paramSpecs.period(9),
         emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
-        readFormingBar: predef.paramSpecs.bool(false),
+        updates: predef.paramSpecs.enum({ live: "Live: the forming bar, every tick", close: "At bar close" }, "live"),
         showBars: predef.paramSpecs.bool(true),
         showEmas: predef.paramSpecs.bool(false),
         fontSize: predef.paramSpecs.number(13, 1, 8),
+        corner: predef.paramSpecs.enum({ topLeft: "Top left", topRight: "Top right", bottomLeft: "Bottom left", bottomRight: "Bottom right" }, "topLeft"),
         boxX: predef.paramSpecs.number(8, 1, 0),
         boxY: predef.paramSpecs.number(30, 1, 0)
     },
