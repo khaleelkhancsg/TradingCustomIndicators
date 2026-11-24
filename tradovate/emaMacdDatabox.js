@@ -28,6 +28,23 @@
  * On the long side a warning reads Potentially short; on the short side, Potentially
  * long. Each row's warning can be switched off.
  *
+ * WEAK WARNINGS: "VWAP slope", marked by default. A warning that calls the way the RTH VWAP has
+ * already moved over the last 15 minutes reads "Potentially short (weak)" in grey: a Potentially
+ * short while VWAP is falling, a Potentially long while it rises. "Hide those warnings" shows the
+ * row's plain side instead; "Off" shows every warning as before.
+ *   Why: the lab's idea loop (mnq_chart_lab/research/idea_lab.mjs, ledger idea_lab_ledger.md)
+ *   screened about 300 ideas on 2026 and confirmed two on 2025, unchanged, against 100 placebo
+ *   markets. Both are this one rule. Measured as an 18-point race from the warning's bar close:
+ *   - 1m EMA warnings agreeing with VWAP's slope won 4.5 points less often in 2026 (46.8%) and
+ *     1.8 less in 2025 (worse than 98 of 100 placebo markets).
+ *   - Every row's warnings calling against VWAP's slope won 3.9 points more often than all
+ *     warnings in 2026, and 2.2 more in 2025 (beyond 97 of 100).
+ *   A few points of win rate, not a strategy: the warnings still do not predict on their own.
+ *   VWAP here is the lab's "VWAP (RTH)": the typical price (H + L + C) / 3 weighted by volume,
+ *   from 08:30 CT, read against the bar that started 15 minutes or more before. Before 08:45 CT,
+ *   outside 08:30-15:00, and on bars of 75 minutes or longer there is no slope and nothing is
+ *   marked. Volume is the chart's own, so a tick or range chart's VWAP is its own too.
+ *
  * The count is how many bars the row has been on its side, the cross bar included, and
  * the forming bar too while the box reads it. A warning does not reset it: the lines have
  * not crossed.
@@ -110,19 +127,49 @@ function rowStep(prev, diff, rule) {
     }
     return { side, bars, warn, diff, move };
 }
+// ── the RTH VWAP and its slope (the "VWAP slope" setting) ───────────────────────────────
+// Chicago time from UTC with US daylight-saving rules, no Intl (as mnqMacdFade1250.js does).
+function nthSunday(y, m, n) {
+    const dow = new Date(Date.UTC(y, m, 1)).getUTCDay();
+    return 1 + ((7 - dow) % 7) + 7 * (n - 1);
+}
+function ctOffsetH(ms) {
+    const y = new Date(ms).getUTCFullYear();
+    return ms >= Date.UTC(y, 2, nthSunday(y, 2, 2), 8) && ms < Date.UTC(y, 10, nthSunday(y, 10, 1), 7) ? -5 : -6;
+}
+const RTH_OPEN = 8 * 60 + 30, RTH_CLOSE = 15 * 60, SLOPE_MS = 15 * 60000;
+// One bar of the RTH VWAP (typical price (H + L + C) / 3, weighted by volume, from 08:30 CT;
+// none outside 08:30-15:00), from the bar before: the lab's "VWAP (RTH)".
+function vwapStep(prev, ms, h, l, c, v) {
+    const local = ms + ctOffsetH(ms) * 3600000, day = Math.floor(local / 86400000), ct = Math.floor(local / 60000) % 1440;
+    if (ct < RTH_OPEN || ct >= RTH_CLOSE) return { day, on: false, pv: 0, vv: 0, v: NaN };
+    const fresh = !prev || prev.day !== day || !prev.on;
+    const tp = (h + l + c) / 3, vol = v > 0 ? v : 0;
+    const pv = (fresh ? 0 : prev.pv) + tp * vol, vv = (fresh ? 0 : prev.vv) + vol;
+    return { day, on: true, pv, vv, v: vv > 0 ? pv / vv : tp };
+}
+
 // The settings as rules; a setting saved as on / off by the first version still reads.
 const emaRule = (v) => (v === false || v === "off" ? "off" : v === "closer" ? "shrink" : v === "slowing" ? "slowing" : "speed");
 const macdRule = (v) => (v === false || v === "off" ? "off" : "shrink");
+const vwapRule = (v) => (v === "off" || v === "hide" ? v : "mark");
 
-function stateText(r, ready) {
+// A row's text and colour. `slope` is the RTH VWAP's direction over the last 15 minutes (+1, -1,
+// or 0 when there is none), and `rule` the "VWAP slope" setting: a warning calling the way VWAP
+// is already going is the weaker kind, so "mark" dims it and adds "(weak)", "hide" shows the
+// row's plain side instead, and "off" leaves every warning as it is.
+function stateText(r, ready, slope, rule) {
     if (!ready || r.side === 0) return ["Warming up", COLORS.dim];
-    if (r.side === 1) return r.warn ? ["Potentially short", COLORS.potShort] : ["Long", COLORS.long];
-    return r.warn ? ["Potentially long", COLORS.potLong] : ["Short", COLORS.short];
+    const weak = r.warn && slope !== 0 && r.warn === slope && rule !== "off";
+    const warn = r.warn && !(weak && rule === "hide");
+    if (r.side === 1) return warn ? [weak ? "Potentially short (weak)" : "Potentially short", weak ? COLORS.dim : COLORS.potShort] : ["Long", COLORS.long];
+    return warn ? [weak ? "Potentially long (weak)" : "Potentially long", weak ? COLORS.dim : COLORS.potLong] : ["Short", COLORS.short];
 }
 
 class EmaMacdDatabox {
     init() {
         this.st = [];
+        this.vwAt = [];    // each bar's RTH VWAP and start time, for the 15-minute slope
     }
 
     map(d, i) {
@@ -147,6 +194,19 @@ class EmaMacdDatabox {
             emaReady: idx >= p.emaSlow,
             macdReady: !!sg && sg.count >= p.macdSignal
         };
+        // the RTH VWAP on this bar, and its direction since the bar that started 15 minutes or more
+        // before this one (on 1-minute bars, 15 bars back; none before 08:45 CT, as in the research)
+        const t = d.timestamp(), barMs = t instanceof Date ? t.getTime() : Number(t);
+        S.vw = vwapStep(prev && prev.vw, barMs, d.high(), d.low(), d.close(), d.volume());
+        this.vwAt[idx] = { ms: barMs, v: S.vw.v };
+        S.slope = 0;
+        if (Number.isFinite(S.vw.v)) {
+            let k = idx - 1;
+            while (k >= 0 && this.vwAt[k] && this.vwAt[k].ms > barMs - SLOPE_MS) k--;
+            const ref = k >= 0 && this.vwAt[k] && barMs - this.vwAt[k].ms <= SLOPE_MS + 60 * 60000 ? this.vwAt[k].v : NaN;
+            if (Number.isFinite(ref)) S.slope = S.vw.v > ref ? 1 : S.vw.v < ref ? -1 : 0;
+        }
+        if (idx >= 400) this.vwAt[idx - 400] = undefined;
         this.st[idx] = S;
         if (idx >= KEEP) this.st[idx - KEEP] = undefined;
 
@@ -172,7 +232,9 @@ class EmaMacdDatabox {
             { label: `MACD ${p.macdFast}/${p.macdSlow}/${p.macdSignal}`, r: S.macd || { side: 0 }, ready: S.macdReady }
         ];
         const labelW = Math.max(...rows.map((r) => r.label.length)) * em;
-        const stateW = "Potentially short".length * em;
+        const rule = vwapRule(p.vwapSlope);
+        // the state is bold, wider than `em` a character: size its column for that
+        const stateW = (rule === "mark" ? "Potentially short (weak)" : "Potentially short").length * fs * 0.62;
         const ageW = p.showBars ? "999 bars".length * em : 0;
         // Each line of text is centred in its column. Tradovate's docs do not say which way
         // "leftMiddle" text runs from its point, and read the other way, left-aligned text runs
@@ -204,7 +266,7 @@ class EmaMacdDatabox {
         }];
         rows.forEach((row, k) => {
             const y = Y(3 + (k + 1.5) * step);
-            const [text, fill] = stateText(row.r, row.ready);
+            const [text, fill] = stateText(row.r, row.ready, S.slope || 0, rule);
             const n = row.ready && row.r.side !== 0 ? row.r.bars : 0;
             items.push(
                 { tag: "Text", key: "dbLabel" + k, global: true, ...at, point: { x: X(xLabel), y },
@@ -233,6 +295,7 @@ module.exports = {
         emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", slowing: "Momentum slowing: gap moving less than the bar before", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
         updates: predef.paramSpecs.enum({ live: "Live: the forming bar, every tick", close: "At bar close" }, "live"),
+        vwapSlope: predef.paramSpecs.enum({ mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", hide: "Hide those warnings", off: "Off" }, "mark"),
         showBars: predef.paramSpecs.bool(true),
         showEmas: predef.paramSpecs.bool(false),
         fontSize: predef.paramSpecs.number(13, 1, 8),

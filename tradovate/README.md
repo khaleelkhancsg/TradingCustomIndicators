@@ -434,6 +434,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 | **Short** | The same, below |
 | **Potentially short** | Long, but turning. MACD: the histogram bar it reads (the MACD line minus the signal line; live, the forming bar) is smaller than the one before it. EMA: the gap between the EMAs closed by more on that bar than on the bar before |
 | **Potentially long** | Short, but turning, the same two ways: the MACD bar nearer zero than the one before, or the EMA gap closing faster than it did |
+| **Potentially short (weak)**, grey | A warning calling the way the RTH VWAP has already moved over the last 15 minutes: a Potentially short while VWAP is falling, a Potentially long (weak) while it rises. Both were measured as the weaker kind; see below |
 | **Warming up** | Not enough bars yet |
 
 - **The count** (`12 bars`) is how many bars the row has been on its side, the cross bar included, and the forming bar too when it updates live. A warning does not reset it, since the lines have not crossed.
@@ -444,6 +445,13 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
   - When it fires before the turn, price still goes about 31 points the other way first, as on random markets.
   - 92% of its warnings clear back to plain Long or Short without the lines crossing, within about 2 minutes on 1-minute bars.
   - Taken as a reversal entry, it did worse than random entries in 2019-2025 and no better in 2026.
+- **Weak warnings** (`vwapSlope`, marked by default). Of about 300 ideas tested on MNQ to make the warnings more accurate, one held on a second year: whether the warning agrees with the RTH VWAP's direction over the last 15 minutes.
+  - Measured as a race from the warning's bar close: does price go 0.064% of its price (18 points in 2026) the called way before it goes as far the other way?
+  - 1-minute EMA warnings that agree with VWAP's slope won 4.5 points less often than other EMA warnings in 2026 (46.8%), and 1.8 less in 2025, worse than 98 of 100 random markets.
+  - Every row's warnings that call against VWAP's slope won 3.9 points more often than all warnings in 2026, and 2.2 more in 2025, beyond 97 of 100 random markets.
+  - Found on 2026 and confirmed on 2025 with nothing changed. It still has to hold on bars nobody has tested yet. It is a few points of win rate, not a strategy: the warnings still don't predict on their own.
+  - `vwapSlope` = `hide` shows the row's plain side instead of a weak warning; `off` shows every warning as before.
+  - The VWAP is the RTH one: typical price (H + L + C) / 3 weighted by the chart's volume, from 08:30 CT, read against the bar that started 15 minutes or more earlier. Before 08:45 CT, after 15:00, and on bars of 75 minutes or longer there is no slope and nothing is marked. On 1-minute MNQ in 2026 its direction matched the backtests' VWAP on all 50,475 RTH minutes that have one.
 - **Live, by default.** The box reads the forming bar, so it moves with each tick as Tradovate's EMA and MACD lines do, on any timeframe. A row can change and change back while a bar forms. Once the bar closes, it reads what the at-close box reads for that bar. Its top line says `live`.
 - **At bar close** (`updates`) reads the bar that last finished instead, so the box changes once a bar and never flickers. Its top line says `at bar close`.
   - My backtests read the box both ways. Read live, 60% of flips undo themselves before their minute closes.
@@ -463,6 +471,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 | `emaWarning` | gap closing faster | When the EMA row warns: the gap closing faster than the bar before (`speed`), closing at all (`closer`, the first version's), moving less than the bar before (`slowing`, momentum fading), or `off` |
 | `macdWarning` | on | The MACD row's warning: its histogram bar smaller than the one before |
 | `updates` | live | `live` reads the forming bar with every tick; `close` reads the last finished bar, once a bar. It replaced `readFormingBar` (off) on 2026-11-23, and a chart that saved that setting now reads live |
+| `vwapSlope` | mark | Warnings that call the way the RTH VWAP moved over the last 15 minutes: `mark` shows them grey with "(weak)", `hide` shows the row's plain side instead, `off` shows them as any other warning |
 | `showBars` | on | The count column |
 | `showEmas` | off | Draw the two EMAs the EMA row reads |
 | `fontSize` | 13 | Text size |
@@ -474,6 +483,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 - **The same arithmetic as Tradovate's own EMA and MACD.** Each EMA is the average of its first n bars, then moves 2 / (n + 1) of the way to each new close, as Tradovate's EMA tool does. The MACD's signal line starts on bar slow - 1, as its MACD does. It was checked on the backtester's mock of Tradovate's runtime, against Tradovate's own EMA and MACD code:
   - the EMA lines matched to the last digit on every bar;
   - each row's side, warning and count matched what the built-in MACD's histogram says, at 127 points across 6,000 bars;
+  - its VWAP slope, and so each "(weak)" mark, matched a plain reference VWAP on the mock's bars and the backtests' VWAP on 2026's real bars;
   - a bar mapped again while it forms changes nothing once it closes;
   - live, a bar read tick by tick ends where the at-close box reads it.
 - **On a chart whose last bar has finished** (the market closed), the live box reads that last bar, and the at-close box the bar before it.
