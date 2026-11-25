@@ -424,6 +424,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 
 - **Any timeframe and bar type:** minutes, hours, days, ticks, range or Renko. It reads the bars of the chart it is on.
 - **Load a few hundred bars.** A row reads `Warming up` until its slow EMA, or the MACD's signal line, has had its full length: 26 bars and 34 bars at the defaults.
+- **On a 1-minute chart, load about 13 weeks of bars** for the adaptive "(weak)" mark: it needs 60 sessions behind it before it marks anything. The box knows it is on a 1-minute chart when its bars are one minute apart.
 - **To check it against the lines,** add Tradovate's own MACD (12, 26, 9), or switch on `showEmas`. The rows read the same numbers those draw.
 
 ### Reading it
@@ -436,6 +437,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 | **Potentially long** | Short, but turning, the same two ways: the MACD bar nearer zero than the one before, or the EMA gap closing faster than it did |
 | **Potentially short (weak)**, grey | A warning calling the way the RTH VWAP has already moved over the last 15 minutes: a Potentially short while VWAP is falling, a Potentially long (weak) while it rises. Both were measured as the weaker kind; see below |
 | **Warming up** | Not enough bars yet |
+| **Fast EMA 3/13** row (1-minute charts) | Only its warning: **Potentially short** / **Potentially long** when the EMA 3 to EMA 13 gap moves its side's way by less than it did on the bar before, otherwise **No warning**. See "The fast row" below |
 
 - **The count** (`12 bars`) is how many bars the row has been on its side, the cross bar included, and the forming bar too when it updates live. A warning does not reset it, since the lines have not crossed.
 - **A cross needs the lines to swap sides.** Lines exactly equal keep the side they had, and a histogram bar the same size as the one before is not a warning.
@@ -445,7 +447,7 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
   - When it fires before the turn, price still goes about 31 points the other way first, as on random markets.
   - 92% of its warnings clear back to plain Long or Short without the lines crossing, within about 2 minutes on 1-minute bars.
   - Taken as a reversal entry, it did worse than random entries in 2019-2025 and no better in 2026.
-- **Weak warnings** (`vwapSlope`, off by default since 2026-11-25). Of about 300 ideas tested on MNQ to make the warnings more accurate, one held on a second year: whether the warning agrees with the RTH VWAP's direction over the last 15 minutes.
+- **Weak warnings** (`vwapSlope`, `adaptive` by default on 1-minute charts; other charts read it as off). Of about 300 ideas tested on MNQ to make the warnings more accurate, one held on a second year: whether the warning agrees with the RTH VWAP's direction over the last 15 minutes.
   - Measured as a race from the warning's bar close: does price go 0.064% of its price (18 points in 2026) the called way before it goes as far the other way?
   - 1-minute EMA warnings that agree with VWAP's slope won 4.5 points less often than other EMA warnings in 2026 (46.8%), and 1.8 less in 2025, worse than 98 of 100 random markets.
   - Every row's warnings that call against VWAP's slope won 3.9 points more often than all warnings in 2026, and 2.2 more in 2025, beyond 97 of 100 random markets.
@@ -458,7 +460,11 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
     - On 1-minute charts only: other timeframes are untested.
   - `vwapSlope` = `hide` shows the row's plain side instead of a weak warning; `off` shows every warning as before.
   - The VWAP is the RTH one: typical price (H + L + C) / 3 weighted by the chart's volume, from 08:30 CT, read against the bar that started 15 minutes or more earlier. Before 08:45 CT, after 15:00, and on bars of 75 minutes or longer there is no slope and nothing is marked. On 1-minute MNQ in 2026 its direction matched the backtests' VWAP on all 50,475 RTH minutes that have one.
-- **On a 1-minute chart, EMA 3/13 with "Momentum slowing" warns better.** Of 153 EMA lengths and warning rules tested on 1-minute MNQ 2019-2025, this one was best, and better again in 2026 than the default 12/26 "Gap closing faster". On NQ 2010-2018, data nobody had tested, it beat the default by 1.2 points of win rate in the same 18-point race, more than any of 100 random markets, and its warnings were right more often than chance on their own. It beat the default in 14 of 17 years. Set `emaFast` 3, `emaSlow` 13 and `emaWarning` "Momentum slowing" on the 1-minute chart only: on 2-minute bars the same setting failed, so the defaults stay for every timeframe. It makes the EMA row cross faster too; crosses predict nothing at either length.
+- **The fast row (1-minute charts): EMA 3/13, "momentum slowing".** Of 153 EMA lengths and warning rules tested on 1-minute MNQ 2019-2025, this one warned best, and better again in 2026 than the default 12/26 "Gap closing faster".
+  - In the same 18-point race it beat the default warning by 1.2 points of win rate on NQ 2010-2018 and by 1.9 on ES 2010-2026, data nobody had tested, more than any of 100 random markets; its own warnings were right more often than chance on both. It beat the default in 14 of 17 years, and held when the race starts at the next bar's open.
+  - It only improves the warning. Its crosses, like the 12/26's, predict nothing; on 2-minute bars the same setting failed; and the adaptive mark was measured on the 12/26 rows. So it is a third row beside them, showing only its warning and never marked "(weak)", and the 12/26 rows keep the side and the count.
+  - Its warnings matched the research's, bar for bar, on all 2,641,986 1-minute MNQ bars of 2019-2026.
+  - `fastRow` = `auto` shows it on 1-minute charts, `on` everywhere (untested off 1-minute), `off` never.
 - **On a 5-minute chart, a warning means the trend is still on.** Over 17 years the 5-minute EMA and MACD warnings called the wrong way: after a "Potentially short" on the long side, price kept rising more often than chance. Measured in the same 18-point race: MNQ 2019-2025 -1.4 (EMA) and -1.1 (MACD) points of win rate; NQ 2010-2018 -1.7 and -1.4; ES 2010-2026, data nobody had tested, -2.2 and -1.6, worse than all 100 random markets. Wrong way in 15 of 17 years, but close to zero since 2023. Read a 5-minute warning as the trend pausing, not turning.
 - **Live, by default.** The box reads the forming bar, so it moves with each tick as Tradovate's EMA and MACD lines do, on any timeframe. A row can change and change back while a bar forms. Once the bar closes, it reads what the at-close box reads for that bar. Its top line says `live`.
 - **At bar close** (`updates`) reads the bar that last finished instead, so the box changes once a bar and never flickers. Its top line says `at bar close`.
@@ -479,7 +485,9 @@ A box in a corner of the chart with one row for the EMA cross and one for the MA
 | `emaWarning` | gap closing faster | When the EMA row warns: the gap closing faster than the bar before (`speed`), closing at all (`closer`, the first version's), moving less than the bar before (`slowing`, momentum fading), or `off` |
 | `macdWarning` | on | The MACD row's warning: its histogram bar smaller than the one before |
 | `updates` | live | `live` reads the forming bar with every tick; `close` reads the last finished bar, once a bar. It replaced `readFormingBar` (off) on 2026-11-23, and a chart that saved that setting now reads live |
-| `vwapSlope` | off | Warnings that call the way the RTH VWAP moved over the last 15 minutes: `mark` shows them grey with "(weak)", `hide` shows the row's plain side instead, `off` shows them as any other warning. `adaptive` marks whichever side of the slope lost over the last 60 sessions (1-minute charts) |
+| `vwapSlope` | adaptive | `adaptive` marks "(weak)" the side of VWAP's slope whose warnings lost over the last 60 sessions (1-minute charts; elsewhere it reads as off). `mark` greys the warnings calling the way the RTH VWAP moved over the last 15 minutes, `hide` shows the row's plain side instead of them, `off` shows every warning plainly |
+| `fastRow` | auto | The fast EMA row: `auto` on 1-minute charts, `on`, or `off` |
+| `fastEmaFast`, `fastEmaSlow` | 3, 13 | The fast row's two lengths, warning when momentum slows. 3 and 13 are the tested ones |
 | `showBars` | on | The count column |
 | `showEmas` | off | Draw the two EMAs the EMA row reads |
 | `fontSize` | 13 | Text size |

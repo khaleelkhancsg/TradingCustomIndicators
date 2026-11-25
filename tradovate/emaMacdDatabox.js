@@ -28,7 +28,8 @@
  * On the long side a warning reads Potentially short; on the short side, Potentially
  * long. Each row's warning can be switched off.
  *
- * WEAK WARNINGS: "VWAP slope", off by default since 2026-11-25. A warning calling the way the RTH VWAP has
+ * WEAK WARNINGS: "VWAP slope", "adaptive" by default (1-minute charts; elsewhere it reads as off).
+ * With "mark", a warning calling the way the RTH VWAP has
  * already moved over the last 15 minutes reads "Potentially short (weak)" in grey: a Potentially
  * short while VWAP is falling, a Potentially long while it rises. "Hide those warnings" shows the
  * row's plain side instead; "Off" shows every warning as before.
@@ -43,10 +44,17 @@
  *   Then checked over 17 years (NQ 2010-2018, unseen; MNQ 2019-2026): the rule REVERSES. Warnings
  *   against VWAP's slope did worse in 13 of 17 years (NQ 2010-2018: -1.9 points, beyond all 100
  *   placebo markets the other way), flat in 2022-2024, better only in 2025-2026. A recent regime,
- *   so it is off by default; "mark" shows it for those trading that regime.
- *   "Adaptive" follows the regime instead: each session it marks the side of VWAP's slope whose
- *   warnings lost over the last 60 sessions (nothing for the first 60). Over 17 years this held on
- *   NQ, MNQ and ES (the lab's confirmed #4); see the README. On 1-minute charts only.
+ *   so "mark" is no longer the default; it shows the rule for those trading that regime.
+ *   "Adaptive", the default, follows the regime instead: each session it marks the side of VWAP's
+ *   slope whose warnings lost over the last 60 sessions (nothing for the first 60). Over 17 years
+ *   this held on NQ, MNQ and ES (the lab's confirmed #4); see the README. On 1-minute charts only.
+ *
+ * FAST ROW: "Fast EMA 3/13", shown on 1-minute charts. Its only reading is its warning: the gap
+ *   between EMA 3 and EMA 13 moving its side's way by less than on the bar before ("momentum
+ *   slowing"), as Potentially short / long. Of 153 EMA lengths and rules tested on 1-minute MNQ,
+ *   this warned best, and it held on NQ 2010-2018 and ES 2010-2026 (the lab's confirmed #3). It
+ *   sits beside the 12/26 rows rather than replacing them: its crosses predict nothing, and the
+ *   adaptive mark was measured on the 12/26 rows, so the fast row is never marked "(weak)".
  *   VWAP here is the lab's "VWAP (RTH)": the typical price (H + L + C) / 3 weighted by volume,
  *   from 08:30 CT, read against the bar that started 15 minutes or more before. Before 08:45 CT,
  *   outside 08:30-15:00, and on bars of 75 minutes or longer there is no slope and nothing is
@@ -250,6 +258,14 @@ function stateText(r, ready, slope, rule, mode) {
     return warn ? [weak ? "Potentially long (weak)" : "Potentially long", weak ? COLORS.dim : COLORS.potLong] : ["Short", COLORS.short];
 }
 
+// The fast row shows only its warning: the research measured its warnings (confirmed #3), and its
+// crosses, like any EMA's, predict nothing. Never marked "(weak)": #4 was measured on the other rows.
+function fastText(r, ready) {
+    if (!ready || r.side === 0) return ["Warming up", COLORS.dim];
+    if (!r.warn) return ["No warning", COLORS.dim];
+    return r.warn === -1 ? ["Potentially short", COLORS.potShort] : ["Potentially long", COLORS.potLong];
+}
+
 class EmaMacdDatabox {
     init() {
         this.st = [];
@@ -271,16 +287,26 @@ class EmaMacdDatabox {
         const line = mf.v - ms.v;
         const sg = idx >= p.macdSlow - 1 ? emaStep(prev && prev.sg, line, p.macdSignal) : null;
 
+        // the fast row: EMA 3/13 by default, warning when momentum slows (confirmed #3, 1-minute charts)
+        const ff = emaStep(prev && prev.ff, x, p.fastEmaFast);
+        const fs = emaStep(prev && prev.fs, x, p.fastEmaSlow);
+
         const S = {
-            ef, es, mf, ms, sg,
+            ef, es, mf, ms, sg, ff, fs,
             ema: rowStep(prev && prev.ema, ef.v - es.v, emaRule(p.emaWarning)),
             macd: sg ? rowStep(prev && prev.macd, line - sg.v, macdRule(p.macdWarning)) : null,
+            fast: rowStep(prev && prev.fast, ff.v - fs.v, "slowing"),
             emaReady: idx >= p.emaSlow,
-            macdReady: !!sg && sg.count >= p.macdSignal
+            macdReady: !!sg && sg.count >= p.macdSignal,
+            fastReady: idx >= p.fastEmaSlow
         };
         // the RTH VWAP on this bar, and its direction since the bar that started 15 minutes or more
         // before this one (on 1-minute bars, 15 bars back; none before 08:45 CT, as in the research)
         const t = d.timestamp(), barMs = t instanceof Date ? t.getTime() : Number(t);
+        // a 1-minute chart: the smallest step between bars so far is one minute (a gap never shortens it)
+        S.at = barMs;   // (S.ms is the MACD's slow EMA)
+        S.gap = prev ? (barMs > prev.at ? Math.min(prev.gap, barMs - prev.at) : prev.gap) : Infinity;
+        S.is1m = S.gap === 60000;
         S.vw = vwapStep(prev && prev.vw, barMs, d.high(), d.low(), d.close(), d.volume());
         this.vwAt[idx] = { ms: barMs, v: S.vw.v };
         S.slope = 0;
@@ -315,12 +341,16 @@ class EmaMacdDatabox {
     box(S, live) {
         const p = this.props, fs = Math.max(8, p.fontSize), step = fs + 7;
         const em = fs * 0.56;            // about one character's width
+        const showFast = p.fastRow === "on" || (p.fastRow !== "off" && S.is1m);
         const rows = [
             { label: `EMA ${p.emaFast}/${p.emaSlow}`, r: S.ema, ready: S.emaReady },
-            { label: `MACD ${p.macdFast}/${p.macdSlow}/${p.macdSignal}`, r: S.macd || { side: 0 }, ready: S.macdReady }
+            { label: `MACD ${p.macdFast}/${p.macdSlow}/${p.macdSignal}`, r: S.macd || { side: 0 }, ready: S.macdReady },
+            { label: `Fast EMA ${p.fastEmaFast}/${p.fastEmaSlow}`, r: S.fast, ready: S.fastReady, fast: true, hidden: !showFast }
         ];
-        const labelW = Math.max(...rows.map((r) => r.label.length)) * em;
-        const rule = vwapRule(p.vwapSlope);
+        const shown = rows.filter((r) => !r.hidden);
+        const labelW = Math.max(...shown.map((r) => r.label.length)) * em;
+        // "adaptive" is the 1-minute rule; on other charts it reads as off
+        const set = vwapRule(p.vwapSlope), rule = set === "adaptive" && !S.is1m ? "off" : set;
         // the state is bold, wider than `em` a character: size its column for that
         const stateW = (rule === "mark" || rule === "adaptive" ? "Potentially short (weak)" : "Potentially short").length * fs * 0.62;
         const ageW = p.showBars ? "999 bars".length * em : 0;
@@ -329,7 +359,7 @@ class EmaMacdDatabox {
         // out of the box's left side; centred text means the same either way.
         const xLabel = 8 + labelW / 2, xState = 8 + labelW + 14 + stateW / 2, xAge = 8 + labelW + 14 + stateW + 14 + ageW / 2;
         const width = 8 + labelW + 14 + stateW + (p.showBars ? 14 + ageW : 0) + 8;
-        const height = (rows.length + 1) * step + 6;
+        const height = (shown.length + 1) * step + 6;
 
         // a point x pixels from the box's left edge and y from its top
         const c = CORNERS[p.corner] || CORNERS.topRight;
@@ -352,13 +382,14 @@ class EmaMacdDatabox {
             point: { x: X(width / 2), y: Y(3 + step / 2) },
             text: `EMA + MACD, ${live ? "live" : "at bar close"}`, style: { fontSize: fs - 2, fill: COLORS.dim }, textAlignment: "centerMiddle"
         }];
+        // every row keeps its keys; a hidden row draws empty text, so the platform still replaces it
         rows.forEach((row, k) => {
-            const y = Y(3 + (k + 1.5) * step);
-            const [text, fill] = stateText(row.r, row.ready, S.slope || 0, rule, S.ad ? S.ad.mode : 0);
-            const n = row.ready && row.r.side !== 0 ? row.r.bars : 0;
+            const y = Y(3 + (Math.min(k, shown.length - 1) + 1.5) * step);
+            const [text, fill] = row.hidden ? ["", COLORS.dim] : row.fast ? fastText(row.r, row.ready) : stateText(row.r, row.ready, S.slope || 0, rule, S.ad ? S.ad.mode : 0);
+            const n = !row.fast && !row.hidden && row.ready && row.r.side !== 0 ? row.r.bars : 0;
             items.push(
                 { tag: "Text", key: "dbLabel" + k, global: true, ...at, point: { x: X(xLabel), y },
-                  text: row.label, style: { fontSize: fs, fill: COLORS.label }, textAlignment: "centerMiddle" },
+                  text: row.hidden ? "" : row.label, style: { fontSize: fs, fill: COLORS.label }, textAlignment: "centerMiddle" },
                 { tag: "Text", key: "dbState" + k, global: true, ...at, point: { x: X(xState), y },
                   text, style: { fontSize: fs, fontWeight: "bold", fill }, textAlignment: "centerMiddle" },
                 { tag: "Text", key: "dbBars" + k, global: true, ...at, point: { x: X(xAge), y },
@@ -383,7 +414,10 @@ module.exports = {
         emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", slowing: "Momentum slowing: gap moving less than the bar before", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
         updates: predef.paramSpecs.enum({ live: "Live: the forming bar, every tick", close: "At bar close" }, "live"),
-        vwapSlope: predef.paramSpecs.enum({ mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", adaptive: "Adaptive: mark the side of VWAP's slope that lost over the last 60 sessions", hide: "Hide those warnings", off: "Off" }, "off"),
+        vwapSlope: predef.paramSpecs.enum({ adaptive: "Adaptive (1-minute charts): mark the side of VWAP's slope that lost over the last 60 sessions", mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", hide: "Hide those warnings", off: "Off" }, "adaptive"),
+        fastRow: predef.paramSpecs.enum({ auto: "On 1-minute charts", on: "On", off: "Off" }, "auto"),
+        fastEmaFast: predef.paramSpecs.period(3),
+        fastEmaSlow: predef.paramSpecs.period(13),
         showBars: predef.paramSpecs.bool(true),
         showEmas: predef.paramSpecs.bool(false),
         fontSize: predef.paramSpecs.number(13, 1, 8),
@@ -394,6 +428,7 @@ module.exports = {
     validate(obj) {
         if (obj.emaSlow <= obj.emaFast) return meta.error("emaSlow", "The slow EMA should be longer than the fast one");
         if (obj.macdSlow <= obj.macdFast) return meta.error("macdSlow", "The MACD's slow period should be longer than its fast one");
+        if (obj.fastEmaSlow <= obj.fastEmaFast) return meta.error("fastEmaSlow", "The fast row's slow EMA should be longer than its fast one");
     },
     inputType: meta.InputType.BARS,
     areaChoice: meta.AreaChoice.OVERLAY,
