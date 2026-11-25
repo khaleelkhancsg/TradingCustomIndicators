@@ -44,6 +44,9 @@
  *   against VWAP's slope did worse in 13 of 17 years (NQ 2010-2018: -1.9 points, beyond all 100
  *   placebo markets the other way), flat in 2022-2024, better only in 2025-2026. A recent regime,
  *   so it is off by default; "mark" shows it for those trading that regime.
+ *   "Adaptive" follows the regime instead: each session it marks the side of VWAP's slope whose
+ *   warnings lost over the last 60 sessions (nothing for the first 60). Over 17 years this held on
+ *   NQ, MNQ and ES (the lab's confirmed #4); see the README. On 1-minute charts only.
  *   VWAP here is the lab's "VWAP (RTH)": the typical price (H + L + C) / 3 weighted by volume,
  *   from 08:30 CT, read against the bar that started 15 minutes or more before. Before 08:45 CT,
  *   outside 08:30-15:00, and on bars of 75 minutes or longer there is no slope and nothing is
@@ -153,18 +156,95 @@ function vwapStep(prev, ms, h, l, c, v) {
     return { day, on: true, pv, vv, v: vv > 0 ? pv / vv : tp };
 }
 
+// ── "Adaptive": the side of VWAP's slope whose warnings won lately ───────────────────────
+// Each RTH session, every new warning on a bar closing 08:30-14:55 CT is raced: does price go
+// 0.064% of its price the called way before as far the other way, by 15:05 CT? A bar reaching both
+// counts against both. Warnings against VWAP's slope and with it are tallied apart. From the 61st
+// session on, the side that won less over the last 60 sessions is the weak one.
+// This is the lab's ADAPT rule (light_check.mjs, idea ADAPT; confirmed #4), whose warnings are the
+// 1-minute and the 5-minute rows', MACD before EMA. On a 1-minute chart the box forms the 5-minute
+// bars itself, clock-aligned, and runs its rows on them with the chart's settings; the research
+// used the defaults. Tested on 1-minute charts only. Each bar's state is new objects built from the
+// bar before's, never changed after, so a bar mapped again as it forms starts from the same place.
+const ADAPT_DAYS = 60, RACE = 0.00064, RACE_FIRST = 8 * 60 + 30, RACE_LAST = 14 * 60 + 55, RACE_END = 15 * 60 + 5;
+const codeOf = (r, ready) => (!ready || !r || r.side === 0 ? 0 : r.side === 1 ? (r.warn ? 2 : 1) : r.warn ? 4 : 3);
+const onsetOf = (a, z) => (z === 4 && a !== 4 ? 1 : z === 2 && a !== 2 ? -1 : 0);
+// The 5-minute rows on a 1-minute chart: each 5-minute bar closes on the 1-minute bar that ends it,
+// or, after a gap, on the next bar there is; its rows then step from the last closed bar's.
+function fiveStep(prev, ms, h, l, c, p) {
+    const bucket = Math.floor(ms / 300000);
+    let agg = prev ? prev.agg : null, rows = prev ? prev.rows : null;
+    const closeAgg = (a, r) => {
+        const idx = r ? r.idx + 1 : 0, x = a.c;
+        const ef = emaStep(r && r.ef, x, p.emaFast), es = emaStep(r && r.es, x, p.emaSlow);
+        const mf = emaStep(r && r.mf, x, p.macdFast), m5 = emaStep(r && r.ms, x, p.macdSlow), line = mf.v - m5.v;
+        const sg = idx >= p.macdSlow - 1 ? emaStep(r && r.sg, line, p.macdSignal) : null;
+        return {
+            idx, ef, es, mf, ms: m5, sg,
+            ema: rowStep(r && r.ema, ef.v - es.v, emaRule(p.emaWarning)),
+            macd: sg ? rowStep(r && r.macd, line - sg.v, macdRule(p.macdWarning)) : null,
+            emaReady: idx >= p.emaSlow, macdReady: !!sg && sg.count >= p.macdSignal
+        };
+    };
+    if (agg && agg.bucket !== bucket) { rows = closeAgg(agg, rows); agg = null; }
+    agg = agg ? { bucket, h: Math.max(agg.h, h), l: Math.min(agg.l, l), c } : { bucket, h, l, c };
+    if ((bucket + 1) * 300000 <= ms + 60000) { rows = closeAgg(agg, rows); agg = null; }
+    return { agg, rows, e: rows ? codeOf(rows.ema, rows.emaReady) : 0, m: rows ? codeOf(rows.macd, rows.macdReady) : 0 };
+}
+function adaptStep(prev, prevS, S, ms, h, l, c) {
+    const local = ms + ctOffsetH(ms) * 3600000, day = Math.floor(local / 86400000), ct = Math.floor(local / 60000) % 1440;
+    let hist = prev ? prev.hist : [], cur = prev ? prev.cur : null, curDay = prev ? prev.curDay : -1, mode = prev ? prev.mode : 0;
+    let pend = prev ? prev.pend : [];
+    const tally = (cr, g, win) => { const k = g === "a" ? 0 : 2; cr[k]++; cr[k + 1] += win ? 1 : 0; };
+    // races still running: this bar settles them, or the day's 15:05 ends them as losses
+    if (pend.length) {
+        const live = ct < RACE_END && day === pend[0].day, next = [];
+        cur = cur.slice();
+        for (const q of pend) {
+            if (!live) { tally(cur, q.g, false); continue; }
+            const up = h - q.P >= q.R, dn = q.P - l >= q.R;
+            if (up || dn) tally(cur, q.g, q.d === 1 ? !dn : !up); else next.push(q);
+        }
+        pend = next;
+    }
+    // a new warning on a counted bar
+    const close = ct + 1;
+    if (close >= RACE_FIRST && close <= RACE_LAST && prevS) {
+        const p5 = prevS.f5 || { e: 0, m: 0 };
+        const d = onsetOf(codeOf(prevS.macd, prevS.macdReady), codeOf(S.macd, S.macdReady)) || onsetOf(codeOf(prevS.ema, prevS.emaReady), codeOf(S.ema, S.emaReady))
+            || onsetOf(p5.m, S.f5.m) || onsetOf(p5.e, S.f5.e);
+        if (d) {
+            if (day !== curDay) {   // the session's first warning: last session's tally joins the history
+                if (cur && curDay >= 0) { hist = hist.concat([cur]); if (hist.length > ADAPT_DAYS) hist = hist.slice(hist.length - ADAPT_DAYS); }
+                cur = [0, 0, 0, 0]; curDay = day;
+                if (hist.length < ADAPT_DAYS) mode = 0;
+                else {
+                    let an = 0, aw = 0, wn = 0, ww = 0;
+                    for (const z of hist) { an += z[0]; aw += z[1]; wn += z[2]; ww += z[3]; }
+                    mode = an && wn ? (aw / an - ww / wn > 0 ? -1 : 1) : 0;   // -1: against the slope won; +1: with it
+                }
+            }
+            if (S.slope) pend = pend.concat([{ d, P: c, R: RACE * c, g: d * S.slope < 0 ? "a" : "w", day }]);
+        }
+    }
+    return { hist, cur, curDay, mode, pend };
+}
+
 // The settings as rules; a setting saved as on / off by the first version still reads.
 const emaRule = (v) => (v === false || v === "off" ? "off" : v === "closer" ? "shrink" : v === "slowing" ? "slowing" : "speed");
 const macdRule = (v) => (v === false || v === "off" ? "off" : "shrink");
-const vwapRule = (v) => (v === "off" || v === "hide" ? v : "mark");
+const vwapRule = (v) => (v === "off" || v === "hide" || v === "adaptive" ? v : "mark");
 
 // A row's text and colour. `slope` is the RTH VWAP's direction over the last 15 minutes (+1, -1,
 // or 0 when there is none), and `rule` the "VWAP slope" setting: a warning calling the way VWAP
 // is already going is the weaker kind, so "mark" dims it and adds "(weak)", "hide" shows the
 // row's plain side instead, and "off" leaves every warning as it is.
-function stateText(r, ready, slope, rule) {
+function stateText(r, ready, slope, rule, mode) {
     if (!ready || r.side === 0) return ["Warming up", COLORS.dim];
-    const weak = r.warn && slope !== 0 && r.warn === slope && rule !== "off";
+    // "adaptive": the weak side is the one that lost over the last 60 sessions (mode -1: warnings
+    // with the slope are weak, as "mark"; +1: those against it; 0, before 60 sessions: none)
+    const weakWay = rule === "adaptive" ? -(mode || 0) : rule === "off" ? 0 : 1;
+    const weak = r.warn && slope !== 0 && weakWay !== 0 && r.warn === weakWay * slope;
     const warn = r.warn && !(weak && rule === "hide");
     if (r.side === 1) return warn ? [weak ? "Potentially short (weak)" : "Potentially short", weak ? COLORS.dim : COLORS.potShort] : ["Long", COLORS.long];
     return warn ? [weak ? "Potentially long (weak)" : "Potentially long", weak ? COLORS.dim : COLORS.potLong] : ["Short", COLORS.short];
@@ -210,6 +290,10 @@ class EmaMacdDatabox {
             const ref = k >= 0 && this.vwAt[k] && barMs - this.vwAt[k].ms <= SLOPE_MS + 60 * 60000 ? this.vwAt[k].v : NaN;
             if (Number.isFinite(ref)) S.slope = S.vw.v > ref ? 1 : S.vw.v < ref ? -1 : 0;
         }
+        if (vwapRule(p.vwapSlope) === "adaptive") {
+            S.f5 = fiveStep(prev && prev.f5, barMs, d.high(), d.low(), d.close(), p);
+            S.ad = adaptStep(prev && prev.ad, prev, S, barMs, d.high(), d.low(), d.close());
+        }
         if (idx >= 400) this.vwAt[idx - 400] = undefined;
         this.st[idx] = S;
         if (idx >= KEEP) this.st[idx - KEEP] = undefined;
@@ -238,7 +322,7 @@ class EmaMacdDatabox {
         const labelW = Math.max(...rows.map((r) => r.label.length)) * em;
         const rule = vwapRule(p.vwapSlope);
         // the state is bold, wider than `em` a character: size its column for that
-        const stateW = (rule === "mark" ? "Potentially short (weak)" : "Potentially short").length * fs * 0.62;
+        const stateW = (rule === "mark" || rule === "adaptive" ? "Potentially short (weak)" : "Potentially short").length * fs * 0.62;
         const ageW = p.showBars ? "999 bars".length * em : 0;
         // Each line of text is centred in its column. Tradovate's docs do not say which way
         // "leftMiddle" text runs from its point, and read the other way, left-aligned text runs
@@ -270,7 +354,7 @@ class EmaMacdDatabox {
         }];
         rows.forEach((row, k) => {
             const y = Y(3 + (k + 1.5) * step);
-            const [text, fill] = stateText(row.r, row.ready, S.slope || 0, rule);
+            const [text, fill] = stateText(row.r, row.ready, S.slope || 0, rule, S.ad ? S.ad.mode : 0);
             const n = row.ready && row.r.side !== 0 ? row.r.bars : 0;
             items.push(
                 { tag: "Text", key: "dbLabel" + k, global: true, ...at, point: { x: X(xLabel), y },
@@ -299,7 +383,7 @@ module.exports = {
         emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", slowing: "Momentum slowing: gap moving less than the bar before", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
         updates: predef.paramSpecs.enum({ live: "Live: the forming bar, every tick", close: "At bar close" }, "live"),
-        vwapSlope: predef.paramSpecs.enum({ mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", hide: "Hide those warnings", off: "Off" }, "off"),
+        vwapSlope: predef.paramSpecs.enum({ mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", adaptive: "Adaptive: mark the side of VWAP's slope that lost over the last 60 sessions", hide: "Hide those warnings", off: "Off" }, "off"),
         showBars: predef.paramSpecs.bool(true),
         showEmas: predef.paramSpecs.bool(false),
         fontSize: predef.paramSpecs.number(13, 1, 8),
