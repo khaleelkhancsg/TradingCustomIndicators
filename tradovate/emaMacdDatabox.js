@@ -28,7 +28,7 @@
  * On the long side a warning reads Potentially short; on the short side, Potentially
  * long. Each row's warning can be switched off.
  *
- * WEAK WARNINGS: "VWAP slope", marked by default. A warning that calls the way the RTH VWAP has
+ * WEAK WARNINGS: "VWAP slope", off by default since 2026-11-25. A warning calling the way the RTH VWAP has
  * already moved over the last 15 minutes reads "Potentially short (weak)" in grey: a Potentially
  * short while VWAP is falling, a Potentially long while it rises. "Hide those warnings" shows the
  * row's plain side instead; "Off" shows every warning as before.
@@ -40,6 +40,10 @@
  *   - Every row's warnings calling against VWAP's slope won 3.9 points more often than all
  *     warnings in 2026, and 2.2 more in 2025 (beyond 97 of 100).
  *   A few points of win rate, not a strategy: the warnings still do not predict on their own.
+ *   Then checked over 17 years (NQ 2010-2018, unseen; MNQ 2019-2026): the rule REVERSES. Warnings
+ *   against VWAP's slope did worse in 13 of 17 years (NQ 2010-2018: -1.9 points, beyond all 100
+ *   placebo markets the other way), flat in 2022-2024, better only in 2025-2026. A recent regime,
+ *   so it is off by default; "mark" shows it for those trading that regime.
  *   VWAP here is the lab's "VWAP (RTH)": the typical price (H + L + C) / 3 weighted by volume,
  *   from 08:30 CT, read against the bar that started 15 minutes or more before. Before 08:45 CT,
  *   outside 08:30-15:00, and on bars of 75 minutes or longer there is no slope and nothing is
@@ -295,7 +299,7 @@ module.exports = {
         emaWarning: predef.paramSpecs.enum({ speed: "Gap closing faster than the bar before", closer: "Gap closing at all", slowing: "Momentum slowing: gap moving less than the bar before", off: "Off" }, "speed"),
         macdWarning: predef.paramSpecs.bool(true),
         updates: predef.paramSpecs.enum({ live: "Live: the forming bar, every tick", close: "At bar close" }, "live"),
-        vwapSlope: predef.paramSpecs.enum({ mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", hide: "Hide those warnings", off: "Off" }, "mark"),
+        vwapSlope: predef.paramSpecs.enum({ mark: "Mark warnings that agree with VWAP's 15-minute slope (weak)", hide: "Hide those warnings", off: "Off" }, "off"),
         showBars: predef.paramSpecs.bool(true),
         showEmas: predef.paramSpecs.bool(false),
         fontSize: predef.paramSpecs.number(13, 1, 8),
