@@ -241,7 +241,14 @@ function adaptStep(prev, prevS, S, ms, h, l, c) {
 // The settings as rules; a setting saved as on / off by the first version still reads.
 const emaRule = (v) => (v === false || v === "off" ? "off" : v === "closer" ? "shrink" : v === "slowing" ? "slowing" : "speed");
 const macdRule = (v) => (v === false || v === "off" ? "off" : "shrink");
-const vwapRule = (v) => (v === "off" || v === "hide" || v === "adaptive" ? v : "mark");
+// A chart saved before a setting existed hands the indicator nothing for it, so a missing VWAP-slope
+// setting reads as the default (adaptive), and missing fast-row lengths as the tested 3 and 13.
+const vwapRule = (v) => (v === "off" || v === "hide" || v === "mark" ? v : "adaptive");
+function fastLens(p) {
+    const f = Number(p.fastEmaFast) >= 1 ? Math.round(Number(p.fastEmaFast)) : 3;
+    const s = Number(p.fastEmaSlow) > f ? Math.round(Number(p.fastEmaSlow)) : Math.max(13, f + 1);
+    return [f, s];
+}
 
 // A row's text and colour. `slope` is the RTH VWAP's direction over the last 15 minutes (+1, -1,
 // or 0 when there is none), and `rule` the "VWAP slope" setting: a warning calling the way VWAP
@@ -288,8 +295,9 @@ class EmaMacdDatabox {
         const sg = idx >= p.macdSlow - 1 ? emaStep(prev && prev.sg, line, p.macdSignal) : null;
 
         // the fast row: EMA 3/13 by default, warning when momentum slows (confirmed #3, 1-minute charts)
-        const ff = emaStep(prev && prev.ff, x, p.fastEmaFast);
-        const fs = emaStep(prev && prev.fs, x, p.fastEmaSlow);
+        const [fastF, fastS] = fastLens(p);
+        const ff = emaStep(prev && prev.ff, x, fastF);
+        const fs = emaStep(prev && prev.fs, x, fastS);
 
         const S = {
             ef, es, mf, ms, sg, ff, fs,
@@ -298,7 +306,7 @@ class EmaMacdDatabox {
             fast: rowStep(prev && prev.fast, ff.v - fs.v, "slowing"),
             emaReady: idx >= p.emaSlow,
             macdReady: !!sg && sg.count >= p.macdSignal,
-            fastReady: idx >= p.fastEmaSlow
+            fastReady: idx >= fastS
         };
         // the RTH VWAP on this bar, and its direction since the bar that started 15 minutes or more
         // before this one (on 1-minute bars, 15 bars back; none before 08:45 CT, as in the research)
@@ -341,11 +349,11 @@ class EmaMacdDatabox {
     box(S, live) {
         const p = this.props, fs = Math.max(8, p.fontSize), step = fs + 7;
         const em = fs * 0.56;            // about one character's width
-        const showFast = p.fastRow === "on" || (p.fastRow !== "off" && S.is1m);
+        const showFast = p.fastRow === "on" || (p.fastRow !== "off" && S.is1m), [fastF, fastS] = fastLens(p);
         const rows = [
             { label: `EMA ${p.emaFast}/${p.emaSlow}`, r: S.ema, ready: S.emaReady },
             { label: `MACD ${p.macdFast}/${p.macdSlow}/${p.macdSignal}`, r: S.macd || { side: 0 }, ready: S.macdReady },
-            { label: `Fast EMA ${p.fastEmaFast}/${p.fastEmaSlow}`, r: S.fast, ready: S.fastReady, fast: true, hidden: !showFast }
+            { label: `Fast EMA ${fastF}/${fastS}`, r: S.fast, ready: S.fastReady, fast: true, hidden: !showFast }
         ];
         const shown = rows.filter((r) => !r.hidden);
         const labelW = Math.max(...shown.map((r) => r.label.length)) * em;
